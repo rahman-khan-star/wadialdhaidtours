@@ -9,7 +9,7 @@ export function FAQ() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <section className="section-padding bg-slate-50 dark:bg-slate-900">
+    <section id="faq" className="section-padding bg-slate-50 dark:bg-slate-900">
       <div className="container-premium mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

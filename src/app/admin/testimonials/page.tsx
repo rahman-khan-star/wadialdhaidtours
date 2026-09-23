@@ -14,6 +14,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { testimonials as initialTestimonials } from "@/data";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { Testimonial } from "@/types";
 
 export default function AdminTestimonialsPage() {
@@ -262,19 +263,12 @@ export default function AdminTestimonialsPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text dark:text-white mb-1">
-                  Avatar URL
-                </label>
-                <input
-                  value={form.avatar}
-                  onChange={(e) =>
-                    setForm({ ...form, avatar: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
-                  placeholder="https://..."
-                />
-              </div>
+              <ImageUploadField
+                label="Avatar URL"
+                value={form.avatar}
+                onChange={(avatar) => setForm({ ...form, avatar })}
+                folder="testimonials"
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text dark:text-white mb-1">

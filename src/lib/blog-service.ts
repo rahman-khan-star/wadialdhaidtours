@@ -1,4 +1,5 @@
 import type { BlogPost } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
@@ -88,21 +89,30 @@ export async function updateBlogPost(id: string, updates: Partial<BlogPost>): Pr
   if (fetchError) throw new Error(`Failed to fetch existing blog post: ${fetchError.message}`);
 
   const current = toClientBlogPost(existing);
-  const merged = { ...current, ...updates } as BlogPost;
+  const merged = { ...current, ...updates, id } as BlogPost;
   const { data, error } = await supabaseServer
     .from("blog_posts")
-    .upsert(toDbBlogPost(merged), { onConflict: "slug", count: "exact" })
+    .update(toDbBlogPost(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update blog post: ${error.message}`);
-  return toClientBlogPost(data);
+  const updated = toClientBlogPost(data);
+  if (current.image !== updated.image) {
+    await releaseMediaUrl(current.image);
+  }
+  return updated;
 }
 
 export async function deleteBlogPost(id: string): Promise<void> {
+  const previous = await getBlogPostById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("blog_posts")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete blog post: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.image);
+  }
 }

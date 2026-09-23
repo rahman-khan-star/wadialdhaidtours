@@ -13,6 +13,39 @@ import {
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formEl = e.currentTarget;
+    const fd = new FormData(formEl);
+
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${fd.get("firstName") ?? ""} ${fd.get("lastName") ?? ""}`.trim(),
+          email: fd.get("email") ?? "",
+          phone: fd.get("phone") ?? "",
+          subject: fd.get("subject") ?? "",
+          message: fd.get("message") ?? "",
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "Failed to send message");
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <>
@@ -55,16 +88,17 @@ export default function ContactPage() {
                     </p>
                   </div>
                 ) : (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      setSubmitted(true);
-                    }}
+                  <form onSubmit={handleSubmit}
                     className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg border border-slate-100 dark:border-slate-700"
                   >
                     <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-5">
                       Send Us a Message
                     </h2>
+                    {error && (
+                      <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-400">
+                        {error}
+                      </div>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -72,7 +106,9 @@ export default function ContactPage() {
                         </label>
                         <input
                           type="text"
+                          name="firstName"
                           required
+                          maxLength={100}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                           placeholder="John"
                         />
@@ -83,7 +119,9 @@ export default function ContactPage() {
                         </label>
                         <input
                           type="text"
+                          name="lastName"
                           required
+                          maxLength={100}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                           placeholder="Doe"
                         />
@@ -94,7 +132,9 @@ export default function ContactPage() {
                         </label>
                         <input
                           type="email"
+                          name="email"
                           required
+                          maxLength={254}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                           placeholder="john@example.com"
                         />
@@ -105,6 +145,8 @@ export default function ContactPage() {
                         </label>
                         <input
                           type="tel"
+                          name="phone"
+                          maxLength={50}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                           placeholder="+92 342 900 5290"
                         />
@@ -115,7 +157,9 @@ export default function ContactPage() {
                         </label>
                         <input
                           type="text"
+                          name="subject"
                           required
+                          maxLength={300}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                           placeholder="Dubai Tour Package Inquiry"
                         />
@@ -126,7 +170,9 @@ export default function ContactPage() {
                         </label>
                         <textarea
                           rows={4}
+                          name="message"
                           required
+                          maxLength={5000}
                           className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 resize-none"
                           placeholder="Tell us about your travel plans..."
                         />
@@ -134,10 +180,11 @@ export default function ContactPage() {
                     </div>
                     <button
                       type="submit"
-                      className="mt-4 inline-flex items-center gap-2 rounded-lg bg-sky-500 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-sky-600"
+                      disabled={sending}
+                      className="mt-4 inline-flex items-center gap-2 rounded-lg bg-sky-500 px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-sky-600 disabled:opacity-60"
                     >
                       <Send className="h-4 w-4" />
-                      Send Message
+                      {sending ? "Sending..." : "Send Message"}
                     </button>
                   </form>
                 )}

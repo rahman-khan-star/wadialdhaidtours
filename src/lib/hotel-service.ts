@@ -1,4 +1,5 @@
 import type { Hotel } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
@@ -85,22 +86,35 @@ export async function createHotel(h: Omit<Hotel, "id">): Promise<Hotel> {
 }
 
 export async function updateHotel(id: string, updates: Partial<Hotel>): Promise<Hotel> {
-  const hotel = { id, ...updates } as Hotel;
+  const previous = await getHotelById(id);
+  if (!previous) throw new Error("Failed to fetch existing hotel");
+
+  const merged = { ...previous, ...updates, id };
   const supabaseServer = await getSupabase();
+  // Update by primary key: upserting on name breaks when the name changes.
   const { data, error } = await supabaseServer
     .from("hotels")
-    .upsert(toDbHotel(hotel), { onConflict: "name", count: "exact" })
+    .update(toDbHotel(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update hotel: ${error.message}`);
-  return toClientHotel(data);
+  const updated = toClientHotel(data);
+  if (previous.image !== updated.image) {
+    await releaseMediaUrl(previous.image);
+  }
+  return updated;
 }
 
 export async function deleteHotel(id: string): Promise<void> {
+  const previous = await getHotelById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("hotels")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete hotel: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.image);
+  }
 }

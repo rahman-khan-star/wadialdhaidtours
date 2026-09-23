@@ -1,4 +1,5 @@
 import type { TeamMember } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
@@ -102,23 +103,32 @@ export async function updateMember(id: string, updates: Partial<TeamMember>): Pr
   if (fetchError) throw new Error(`Failed to fetch existing member: ${fetchError.message}`);
 
   const current = toClientMember(existing);
-  const merged = { ...current, ...updates } as TeamMember;
+  const merged = { ...current, ...updates, id } as TeamMember;
   const { data, error } = await supabaseServer
     .from("team_members")
-    .upsert(toDbTeamMember(merged), { onConflict: "name", count: "exact" })
+    .update(toDbTeamMember(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update team member: ${error.message}`);
-  return toClientMember(data);
+  const updated = toClientMember(data);
+  if (current.photo !== updated.photo) {
+    await releaseMediaUrl(current.photo);
+  }
+  return updated;
 }
 
 export async function deleteMember(id: string): Promise<void> {
+  const previous = await getMemberById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("team_members")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete team member: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.photo);
+  }
 }
 
 export async function reorderMembers(members: { id: string; displayOrder: number }[]): Promise<void> {

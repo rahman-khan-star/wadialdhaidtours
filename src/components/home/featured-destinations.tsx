@@ -4,9 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Star } from "lucide-react";
-import { destinations } from "@/data";
+import type { Destination } from "@/types";
 
-export function FeaturedDestinations() {
+interface FeaturedDestinationsProps {
+  destinations: Destination[];
+}
+
+export function FeaturedDestinations({ destinations }: FeaturedDestinationsProps) {
   return (
     <section className="section-padding bg-slate-50 dark:bg-slate-900">
       <div className="container-premium mx-auto">

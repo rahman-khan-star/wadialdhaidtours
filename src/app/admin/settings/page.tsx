@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, User, Mail, Phone, Globe, Lock, Loader2 } from "lucide-react";
+import { Save, User, Mail, Phone, Globe, Lock } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState({
@@ -22,8 +22,6 @@ export default function AdminSettingsPage() {
   });
 
   const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -44,8 +42,6 @@ export default function AdminSettingsPage() {
         }
       } catch {
         // Keep defaults on error
-      } finally {
-        setLoading(false);
       }
     }
 
@@ -53,7 +49,6 @@ export default function AdminSettingsPage() {
   }, []);
 
   const handleSave = async () => {
-    setSaving(true);
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
@@ -74,8 +69,6 @@ export default function AdminSettingsPage() {
       setTimeout(() => setSaved(false), 3000);
     } catch {
       // Silently fail
-    } finally {
-      setSaving(false);
     }
   };
 

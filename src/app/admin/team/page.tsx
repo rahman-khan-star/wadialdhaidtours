@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { teamMembers as initialTeamMembers } from "@/data";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { TeamMember } from "@/types";
 
 export default function AdminTeamPage() {
@@ -389,19 +390,12 @@ export default function AdminTeamPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text dark:text-white mb-1">
-                  Profile Photo URL
-                </label>
-                <input
-                  value={form.photo}
-                  onChange={(e) =>
-                    setForm({ ...form, photo: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
-                  placeholder="https://..."
-                />
-              </div>
+              <ImageUploadField
+                label="Profile Photo URL"
+                value={form.photo}
+                onChange={(photo) => setForm({ ...form, photo })}
+                folder="team"
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text dark:text-white mb-1">

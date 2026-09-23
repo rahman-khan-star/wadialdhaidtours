@@ -4,12 +4,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Star, MapPin, Clock, ChevronDown } from "lucide-react";
-import { tourPackages } from "@/data";
 import { formatPrice } from "@/lib/utils";
+import type { TourPackage } from "@/types";
 
-const umrahPackages = tourPackages.filter((pkg) => pkg.category === "umrah");
+interface UmrahPackagesProps {
+  packages: TourPackage[];
+}
 
-export function UmrahPackages() {
+export function UmrahPackages({ packages }: UmrahPackagesProps) {
+  const umrahPackages = packages.filter((pkg) => pkg.category === "umrah");
+
   const scrollToPackages = () => {
     const el = document.getElementById("umrah-cards");
     if (el) {

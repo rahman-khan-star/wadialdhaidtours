@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, FileCheck, Globe, Shield, Clock } from "lucide-react";
+import { ArrowRight, Globe, Clock } from "lucide-react";
 import { visaServices } from "@/data";
 
 export function VisaServices() {

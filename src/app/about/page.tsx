@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { Award, Users, Globe, Heart, Shield, Target } from "lucide-react";
+import { Globe, Heart, Shield, Target } from "lucide-react";
+import { getPublicAboutTeam } from "@/lib/public-data";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "About Us",
@@ -35,34 +38,8 @@ const values = [
   },
 ];
 
-const displayedTeam = [
-  {
-    name: "James Mitchell",
-    role: "Founder & CEO",
-    image:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
-  },
-  {
-    name: "Sarah Al-Hassan",
-    role: "Head of Operations",
-    image:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80",
-  },
-  {
-    name: "Ahmed Khan",
-    role: "Travel Director",
-    image:
-      "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&q=80",
-  },
-  {
-    name: "Fatima Rashid",
-    role: "Customer Experience Lead",
-    image:
-      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&q=80",
-  },
-];
-
-export default function AboutPage() {
+export default async function AboutPage() {
+  const displayedTeam = await getPublicAboutTeam();
   return (
     <>
       <section className="relative py-16 overflow-hidden">
@@ -192,7 +169,7 @@ export default function AboutPage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {displayedTeam.map((member) => (
               <div
-                key={member.name}
+                key={member.id ?? member.name}
                 className="premium-card text-center group"
               >
                 <div className="relative mx-auto mb-4 h-32 w-32 overflow-hidden rounded-full">
@@ -209,6 +186,11 @@ export default function AboutPage() {
                 <p className="text-sm text-secondary">{member.role}</p>
               </div>
             ))}
+            {displayedTeam.length === 0 && (
+              <p className="col-span-full text-center text-text-light dark:text-white/60">
+                Team members will appear here soon.
+              </p>
+            )}
           </div>
         </div>
       </section>

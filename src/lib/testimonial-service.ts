@@ -1,4 +1,5 @@
 import type { Testimonial } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
@@ -85,21 +86,30 @@ export async function updateTestimonial(id: string, updates: Partial<Testimonial
   if (fetchError) throw new Error(`Failed to fetch existing testimonial: ${fetchError.message}`);
 
   const current = toClientTestimonial(existing);
-  const merged = { ...current, ...updates } as Testimonial;
+  const merged = { ...current, ...updates, id } as Testimonial;
   const { data, error } = await supabaseServer
     .from("testimonials")
-    .upsert(toDbTestimonial(merged), { onConflict: "name,text", count: "exact" })
+    .update(toDbTestimonial(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update testimonial: ${error.message}`);
-  return toClientTestimonial(data);
+  const updated = toClientTestimonial(data);
+  if (current.avatar !== updated.avatar) {
+    await releaseMediaUrl(current.avatar);
+  }
+  return updated;
 }
 
 export async function deleteTestimonial(id: string): Promise<void> {
+  const previous = await getTestimonialById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("testimonials")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete testimonial: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.avatar);
+  }
 }

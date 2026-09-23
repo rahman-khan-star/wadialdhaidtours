@@ -82,13 +82,13 @@ export async function updateBooking(id: string, updates: Partial<Booking>): Prom
   if (fetchError) throw new Error(`Failed to fetch existing booking: ${fetchError.message}`);
 
   const current = toClientBooking(existing);
-  const merged = { ...current, ...updates } as Booking;
+  const merged = { ...current, ...updates, id } as Booking;
+  // Update by primary key: upserting on name/package/date breaks when any of
+  // those fields change (the existing row id then collides on the primary key).
   const { data, error } = await supabaseServer
     .from("bookings")
-    .upsert(toDbBooking(merged), {
-      onConflict: "name,package_name,date",
-      count: "exact",
-    })
+    .update(toDbBooking(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update booking: ${error.message}`);

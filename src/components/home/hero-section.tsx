@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Search, ArrowRight, Plane, MapPin, Calendar } from "lucide-react";
+import { Search, ArrowRight, MapPin, Calendar } from "lucide-react";
 
 export function HeroSection() {
-  const [searchQuery, setSearchQuery] = useState("");
-
   return (
     <section className="relative min-h-[80vh] flex items-end overflow-hidden pb-56">
       <Image

@@ -88,13 +88,11 @@ export async function updateMessage(id: string, updates: Partial<Message>): Prom
   if (fetchError) throw new Error(`Failed to fetch existing message: ${fetchError.message}`);
 
   const current = toClientMessage(existing);
-  const merged = { ...current, ...updates } as Message;
+  const merged = { ...current, ...updates, id } as Message;
   const { data, error } = await supabaseServer
     .from("messages")
-    .upsert(toDbMessage(merged), {
-      onConflict: "name,subject,date",
-      count: "exact",
-    })
+    .update(toDbMessage(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update message: ${error.message}`);

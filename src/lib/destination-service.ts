@@ -1,12 +1,23 @@
 import type { Destination } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
   return getSupabaseServer();
 }
 
+function slugify(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+  return slug || crypto.randomUUID();
+}
+
 function toDbDestination(dest: {
-  id: string;
+  id?: string;
   name: string;
   country: string;
   description: string;
@@ -16,7 +27,7 @@ function toDbDestination(dest: {
   tags: string[];
 }) {
   return {
-    id: dest.id,
+    ...(dest.id ? { id: dest.id } : {}),
     name: dest.name,
     country: dest.country,
     description: dest.description,
@@ -24,7 +35,7 @@ function toDbDestination(dest: {
     rating: dest.rating,
     price_from: dest.priceFrom,
     tags: dest.tags,
-    slug: dest.id,
+    slug: dest.id ?? slugify(dest.name),
   };
 }
 
@@ -71,12 +82,19 @@ export async function getDestinationById(id: string): Promise<Destination | null
     .from("destinations")
     .select("*")
     .eq("id", id)
-    .single();
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(`Failed to fetch destination: ${error.message}`);
-  }
-  return toClientDestination(data);
+    .maybeSingle();
+  if (error) throw new Error(`Failed to fetch destination: ${error.message}`);
+  if (data) return toClientDestination(data);
+
+  // Seeded rows keep the human-readable slug (e.g. "dubai") while the primary
+  // key is a UUID, so public URLs must also resolve by slug.
+  const { data: bySlug, error: slugError } = await supabaseServer
+    .from("destinations")
+    .select("*")
+    .eq("slug", id)
+    .maybeSingle();
+  if (slugError) throw new Error(`Failed to fetch destination: ${slugError.message}`);
+  return bySlug ? toClientDestination(bySlug) : null;
 }
 
 export async function createDestination(dest: Destination): Promise<Destination> {
@@ -91,22 +109,44 @@ export async function createDestination(dest: Destination): Promise<Destination>
 }
 
 export async function updateDestination(id: string, updates: Partial<Destination>): Promise<Destination> {
-  const dest = { id, ...updates } as Destination;
+  const previous = await getDestinationById(id);
+  if (!previous) throw new Error("Failed to fetch existing destination");
+
+  const merged = { ...previous, ...updates, id };
   const supabaseServer = await getSupabase();
+  // Update by primary key only; the slug is never rewritten so existing
+  // public URLs keep working.
   const { data, error } = await supabaseServer
     .from("destinations")
-    .upsert(toDbDestination(dest), { onConflict: "slug", count: "exact" })
+    .update({
+      name: merged.name,
+      country: merged.country,
+      description: merged.description,
+      image: merged.image,
+      rating: merged.rating,
+      price_from: merged.priceFrom,
+      tags: merged.tags,
+    })
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update destination: ${error.message}`);
-  return toClientDestination(data);
+  const updated = toClientDestination(data);
+  if (previous.image !== updated.image) {
+    await releaseMediaUrl(previous.image);
+  }
+  return updated;
 }
 
 export async function deleteDestination(id: string): Promise<void> {
+  const previous = await getDestinationById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("destinations")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete destination: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.image);
+  }
 }

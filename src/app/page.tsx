@@ -14,22 +14,40 @@ import {
   ContactCTA,
   TeamSection,
 } from "@/components/home";
+import {
+  getPublicBlogPosts,
+  getPublicDestinations,
+  getPublicPackages,
+  getPublicTeamMembers,
+  getPublicTestimonials,
+} from "@/lib/public-data";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const [destinations, packages, testimonials, teamMembers, blogPosts] =
+    await Promise.all([
+      getPublicDestinations(),
+      getPublicPackages(),
+      getPublicTestimonials(),
+      getPublicTeamMembers(),
+      getPublicBlogPosts(),
+    ]);
+
   return (
     <>
       <HeroSection />
       <SearchTrips />
-      <UmrahPackages />
+      <UmrahPackages packages={packages} />
       <VisaServices />
-      <FeaturedDestinations />
-      <PopularPackages />
+      <FeaturedDestinations destinations={destinations} />
+      <PopularPackages packages={packages} />
       <WhyChooseUs />
-      <TeamSection />
-      <Testimonials />
+      <TeamSection members={teamMembers} />
+      <Testimonials testimonials={testimonials} />
       <Statistics />
       <Gallery />
-      <LatestBlog />
+      <LatestBlog posts={blogPosts} />
       <FAQ />
       <ContactCTA />
     </>

@@ -1,4 +1,5 @@
 import type { TourPackage } from "@/types";
+import { releaseMediaUrl } from "@/lib/storage";
 
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
@@ -109,22 +110,36 @@ export async function createPackage(pkg: TourPackage): Promise<TourPackage> {
 }
 
 export async function updatePackage(id: string, updates: Partial<TourPackage>): Promise<TourPackage> {
-  const pkg = { id, ...updates } as TourPackage;
+  const previous = await getPackageById(id);
+  if (!previous) throw new Error("Failed to fetch existing package");
+
+  const merged = { ...previous, ...updates, id };
   const supabaseServer = await getSupabase();
+  // Update by primary key: upserting on title breaks when the title changes
+  // (the existing row id then collides on the primary key).
   const { data, error } = await supabaseServer
     .from("tour_packages")
-    .upsert(toDbPackage(pkg), { onConflict: "title", count: "exact" })
+    .update(toDbPackage(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update package: ${error.message}`);
-  return toClientPackage(data);
+  const updated = toClientPackage(data);
+  if (previous.image !== updated.image) {
+    await releaseMediaUrl(previous.image);
+  }
+  return updated;
 }
 
 export async function deletePackage(id: string): Promise<void> {
+  const previous = await getPackageById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("tour_packages")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete package: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.image);
+  }
 }

@@ -6,9 +6,6 @@ import {
   Package,
   Star,
   MessageSquare,
-  TrendingUp,
-  Users,
-  DollarSign,
   Eye,
 } from "lucide-react";
 import { destinations, tourPackages, testimonials, blogPosts } from "@/data";

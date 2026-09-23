@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { tourPackages as initialPackages } from "@/data";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { TourPackage } from "@/types";
 
 export default function AdminPackagesPage() {
@@ -432,17 +433,12 @@ export default function AdminPackagesPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text dark:text-white mb-1">
-                  Image URL
-                </label>
-                <input
-                  value={form.image}
-                  onChange={(e) => setForm({ ...form, image: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
-                  placeholder="https://..."
-                />
-              </div>
+              <ImageUploadField
+                label="Image URL"
+                value={form.image}
+                onChange={(image) => setForm({ ...form, image })}
+                folder="packages"
+              />
               <div>
                 <label className="block text-sm font-medium text-text dark:text-white mb-1">
                   Highlights (one per line)

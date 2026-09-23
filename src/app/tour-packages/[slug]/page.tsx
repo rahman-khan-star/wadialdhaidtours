@@ -2,20 +2,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, MapPin, Star } from "lucide-react";
-import { tourPackages } from "@/data";
+import { getPublicPackageById } from "@/lib/public-data";
 import { formatPrice } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return tourPackages.map((pkg) => ({ slug: pkg.id }));
-}
-
 export default async function TourPackageDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const pkg = tourPackages.find((item) => item.id === slug);
+  const pkg = await getPublicPackageById(slug);
 
   if (!pkg) {
     notFound();

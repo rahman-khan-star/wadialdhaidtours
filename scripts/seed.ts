@@ -1,4 +1,4 @@
-import { supabaseServer } from "../src/lib/supabase-server";
+import { getSupabaseServer } from "../src/lib/supabase-server";
 import {
   destinations,
   tourPackages,
@@ -10,6 +10,8 @@ import {
   statistics,
   teamMembers,
 } from "../src/data";
+
+const supabaseServer = getSupabaseServer();
 
 // Hardcoded datasets from outside src/data/index.ts
 const hotels = [

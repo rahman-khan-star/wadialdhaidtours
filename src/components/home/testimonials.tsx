@@ -4,7 +4,7 @@ import { useRef } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Star, ChevronLeft, ChevronRight, Quote } from "lucide-react";
-import { testimonials } from "@/data";
+import type { Testimonial } from "@/types";
 
 const extraReviews = [
   {
@@ -36,10 +36,15 @@ const extraReviews = [
   },
 ];
 
-const allReviews = [...testimonials, ...extraReviews];
+interface TestimonialsProps {
+  testimonials: Testimonial[];
+}
 
-export function Testimonials() {
+const allReviews = (testimonials: Testimonial[]) => [...testimonials, ...extraReviews];
+
+export function Testimonials({ testimonials }: TestimonialsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const reviews = allReviews(testimonials);
 
   const scroll = (direction: "left" | "right") => {
     if (scrollRef.current) {
@@ -93,7 +98,7 @@ export function Testimonials() {
           className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {allReviews.map((review, i) => (
+          {reviews.map((review, i) => (
             <motion.div
               key={review.id}
               initial={{ opacity: 0, x: 20 }}
@@ -115,9 +120,11 @@ export function Testimonials() {
                 ))}
               </div>
               <div className="flex items-center gap-3">
-                <img
+                <Image
                   src={review.avatar}
                   alt={review.name}
+                  width={36}
+                  height={36}
                   className="w-9 h-9 rounded-full object-cover"
                 />
                 <div>

@@ -6,17 +6,16 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Eye,
   X,
   Save,
   Loader2,
   AlertTriangle,
-  GripVertical,
   Star,
   MapPin,
 } from "lucide-react";
 import type { Hotel } from "@/types";
-import { getAllHotels, createHotel, updateHotel, deleteHotel } from "@/lib/hotel-service";
+import Image from "next/image";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 
 const initialHotels = [
   {
@@ -189,17 +188,6 @@ export default function AdminHotelsPage() {
     }
   }
 
-  async function toggleActive(h: Hotel) {
-    try {
-      // Hotels don't have isActive in the schema, skip toggling
-      await fetchHotels();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to update hotel";
-      setError(msg);
-      setTimeout(() => setError(null), 5000);
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -242,10 +230,12 @@ export default function AdminHotelsPage() {
             className="rounded-2xl bg-white p-5 luxury-shadow dark:bg-navy-800 dark:border dark:border-white/10"
           >
             <div className="relative h-56 overflow-hidden">
-              <img
+              <Image
                 src={h.image}
                 alt={h.name}
-                className="object-cover h-full w-full"
+                fill
+                sizes="(max-width: 640px) 100vw, 33vw"
+                className="object-cover"
               />
             </div>
             <div className="p-5">
@@ -286,7 +276,7 @@ export default function AdminHotelsPage() {
                     className="text-xl font-bold text-secondary"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >
-                    ${form.price || h.price}
+                    ${h.price}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -357,19 +347,12 @@ export default function AdminHotelsPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text dark:text-white mb-1">
-                  Image URL
-                </label>
-                <input
-                  value={form.image}
-                  onChange={(e) =>
-                    setForm({ ...form, image: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
-                  placeholder="https://..."
-                />
-              </div>
+              <ImageUploadField
+                label="Image URL"
+                value={form.image}
+                onChange={(image) => setForm({ ...form, image })}
+                folder="hotels"
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text dark:text-white mb-1">

@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { Phone, MessageCircle } from "lucide-react";
-import { teamMembers } from "@/data";
 import type { TeamMember } from "@/types";
 
 function TeamCard({ member, index }: { member: TeamMember; index: number }) {
@@ -25,10 +25,12 @@ function TeamCard({ member, index }: { member: TeamMember; index: number }) {
       )}
 
       <div className="relative aspect-square overflow-hidden">
-        <img
+        <Image
           src={member.photo}
           alt={member.name}
-          className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          fill
+          sizes="(max-width: 640px) 50vw, 25vw"
+          className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           style={{ willChange: "transform" }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
@@ -65,8 +67,12 @@ function TeamCard({ member, index }: { member: TeamMember; index: number }) {
   );
 }
 
-export function TeamSection() {
-  const activeMembers = teamMembers
+interface TeamSectionProps {
+  members: TeamMember[];
+}
+
+export function TeamSection({ members }: TeamSectionProps) {
+  const activeMembers = members
     .filter((m) => m.isActive)
     .sort((a, b) => a.displayOrder - b.displayOrder);
 

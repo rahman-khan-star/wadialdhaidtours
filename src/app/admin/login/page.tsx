@@ -134,15 +134,6 @@ export default function AdminLoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
-
-          <div className="mt-6 rounded-xl bg-gold-50 p-4 dark:bg-gold-900/20">
-            <p className="text-xs text-text-light dark:text-white/60 text-center">
-              <strong className="text-secondary">Default Credentials:</strong>
-              <br />
-              Username: <code className="font-mono">admin</code> | Password:{" "}
-              <code className="font-mono">admin123</code>
-            </p>
-          </div>
         </div>
       </motion.div>
     </div>

@@ -2,19 +2,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays } from "lucide-react";
-import { blogPosts } from "@/data";
+import { getPublicBlogPostBySlug } from "@/lib/public-data";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return blogPosts.map((post) => ({ slug: post.slug }));
-}
-
 export default async function BlogDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const post = blogPosts.find((item) => item.slug === slug);
+  const post = await getPublicBlogPostBySlug(slug);
 
   if (!post) {
     notFound();

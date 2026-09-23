@@ -4,10 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Star, Clock, MapPin } from "lucide-react";
-import { tourPackages } from "@/data";
 import { formatPrice } from "@/lib/utils";
+import type { TourPackage } from "@/types";
 
-export function PopularPackages() {
+interface PopularPackagesProps {
+  packages: TourPackage[];
+}
+
+export function PopularPackages({ packages }: PopularPackagesProps) {
   return (
     <section className="section-padding bg-white dark:bg-slate-950">
       <div className="container-premium mx-auto">
@@ -34,7 +38,7 @@ export function PopularPackages() {
         </motion.div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {tourPackages.slice(0, 6).map((pkg, i) => (
+          {packages.slice(0, 6).map((pkg, i) => (
             <motion.div
               key={pkg.id}
               initial={{ opacity: 0, y: 20 }}

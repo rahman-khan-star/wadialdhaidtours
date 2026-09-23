@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, Edit2, Trash2, X, Save, Calendar, Loader2, AlertTriangle } from "lucide-react";
 import { blogPosts as initialPosts } from "@/data";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { BlogPost } from "@/types";
 
 export default function AdminBlogPage() {
@@ -278,16 +279,12 @@ export default function AdminBlogPage() {
                   className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text dark:text-white mb-1">
-                  Image URL
-                </label>
-                <input
-                  value={form.image}
-                  onChange={(e) => setForm({ ...form, image: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-text outline-none dark:bg-navy-900 dark:border-white/10 dark:text-white"
-                />
-              </div>
+              <ImageUploadField
+                label="Image URL"
+                value={form.image}
+                onChange={(image) => setForm({ ...form, image })}
+                folder="blog"
+              />
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button

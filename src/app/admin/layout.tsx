@@ -21,6 +21,9 @@ import {
   Home,
   Users,
   ClipboardList,
+  ScrollText,
+  History,
+  Database,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -34,6 +37,9 @@ const sidebarLinks = [
   { label: "Blog Posts", href: "/admin/blog", icon: FileText },
   { label: "Messages", href: "/admin/messages", icon: MessageSquare },
   { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Activity Logs", href: "/admin/activity", icon: ScrollText },
+  { label: "Login History", href: "/admin/login-history", icon: History },
+  { label: "Backup & Restore", href: "/admin/backup", icon: Database },
 ];
 
 export default function AdminLayout({

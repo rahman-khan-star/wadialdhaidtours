@@ -15,8 +15,7 @@ import {
 const footerLinks = {
   company: [
     { label: "About Us", href: "/about" },
-    { label: "Our Team", href: "/about#team" },
-    { label: "Careers", href: "/careers" },
+    { label: "Our Team", href: "/#team" },
     { label: "Blog", href: "/blog" },
   ],
   destinations: [
@@ -33,7 +32,7 @@ const footerLinks = {
   ],
   support: [
     { label: "Contact Us", href: "/contact" },
-    { label: "FAQs", href: "/faqs" },
+    { label: "FAQs", href: "/#faq" },
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms & Conditions", href: "/terms" },
   ],

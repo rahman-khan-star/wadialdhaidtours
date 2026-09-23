@@ -1,3 +1,5 @@
+import { releaseMediaUrl } from "@/lib/storage";
+
 async function getSupabase() {
   const { getSupabaseServer } = await import("./supabase-server");
   return getSupabaseServer();
@@ -66,21 +68,35 @@ export async function createAboutTeam(m: { name: string; role: string; image: st
 }
 
 export async function updateAboutTeam(id: string, updates: Partial<{ name: string; role: string; image: string }>): Promise<{ id: string; name: string; role: string; image: string }> {
+  const previous = await getAboutTeamById(id);
+  if (!previous) throw new Error("Failed to fetch existing about team member");
+
+  const merged = { ...previous, ...updates, id };
   const supabaseServer = await getSupabase();
+  // Update by primary key: upserting on name breaks when the name changes.
   const { data, error } = await supabaseServer
     .from("about_team")
-    .upsert(toDbAboutTeam({ id, ...updates } as { id: string; name: string; role: string; image: string }), { onConflict: "name", count: "exact" })
+    .update(toDbAboutTeam(merged))
+    .eq("id", id)
     .select()
     .single();
   if (error) throw new Error(`Failed to update about team member: ${error.message}`);
-  return toClientAboutTeam(data);
+  const updated = toClientAboutTeam(data);
+  if (previous.image !== updated.image) {
+    await releaseMediaUrl(previous.image);
+  }
+  return updated;
 }
 
 export async function deleteAboutTeam(id: string): Promise<void> {
+  const previous = await getAboutTeamById(id).catch(() => null);
   const supabaseServer = await getSupabase();
   const { error } = await supabaseServer
     .from("about_team")
     .delete()
     .eq("id", id);
   if (error) throw new Error(`Failed to delete about team member: ${error.message}`);
+  if (previous) {
+    await releaseMediaUrl(previous.image);
+  }
 }

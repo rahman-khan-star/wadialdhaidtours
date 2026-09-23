@@ -4,9 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight, Calendar } from "lucide-react";
-import { blogPosts } from "@/data";
+import type { BlogPost } from "@/types";
 
-export function LatestBlog() {
+interface LatestBlogProps {
+  posts: BlogPost[];
+}
+
+export function LatestBlog({ posts }: LatestBlogProps) {
   return (
     <section className="section-padding bg-white dark:bg-slate-950">
       <div className="container-premium mx-auto">
@@ -32,7 +36,7 @@ export function LatestBlog() {
         </motion.div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {blogPosts.map((post, i) => (
+          {posts.map((post, i) => (
             <motion.div
               key={post.id}
               initial={{ opacity: 0, y: 20 }}

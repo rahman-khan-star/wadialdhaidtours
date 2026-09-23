@@ -2,19 +2,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Star } from "lucide-react";
-import { destinations } from "@/data";
+import { getPublicDestinationById } from "@/lib/public-data";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return destinations.map((destination) => ({ slug: destination.id }));
-}
-
 export default async function DestinationDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const destination = destinations.find((item) => item.id === slug);
+  const destination = await getPublicDestinationById(slug);
 
   if (!destination) {
     notFound();

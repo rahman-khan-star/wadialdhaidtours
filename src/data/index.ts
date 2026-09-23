@@ -18,7 +18,7 @@ export const navLinks: NavLink[] = [
     href: "/destinations",
     children: [
       { label: "Dubai", href: "/destinations/dubai" },
-      { label: "Pakistan", href: "/destinations/pakistan" },
+      { label: "Northern Pakistan", href: "/destinations/northern-pakistan" },
       { label: "All Destinations", href: "/destinations" },
     ],
   },
@@ -26,8 +26,8 @@ export const navLinks: NavLink[] = [
     label: "Tour Packages",
     href: "/tour-packages",
     children: [
-      { label: "Dubai Tours", href: "/tour-packages/dubai" },
-      { label: "Pakistan Tours", href: "/tour-packages/pakistan" },
+      { label: "Dubai Tours", href: "/tour-packages/luxury-dubai-5d" },
+      { label: "Pakistan Tours", href: "/tour-packages/pakistan-heritage-6d" },
       { label: "All Packages", href: "/tour-packages" },
     ],
   },
