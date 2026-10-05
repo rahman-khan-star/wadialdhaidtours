@@ -24,6 +24,7 @@ import {
   ScrollText,
   History,
   Database,
+  FileCheck,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -31,6 +32,7 @@ const sidebarLinks = [
   { label: "Destinations", href: "/admin/destinations", icon: MapPin },
   { label: "Tour Packages", href: "/admin/packages", icon: Package },
   { label: "Hotels", href: "/admin/hotels", icon: MapPin },
+  { label: "Visa Services", href: "/admin/visa-services", icon: FileCheck },
   { label: "Bookings", href: "/admin/bookings", icon: ClipboardList },
   { label: "Team Members", href: "/admin/team", icon: Users },
   { label: "Testimonials", href: "/admin/testimonials", icon: Star },

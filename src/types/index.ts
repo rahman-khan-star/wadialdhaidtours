@@ -55,6 +55,10 @@ export interface VisaService {
   price: number;
   processingTime: string;
   requirements: string[];
+  // Optional so the static fallback dataset keeps type-checking; database rows
+  // always carry both values.
+  isActive?: boolean;
+  displayOrder?: number;
 }
 
 export interface FAQ {

@@ -21,3 +21,12 @@ export function clampText(value: unknown, maxLength: number): string {
   if (typeof value !== "string") return "";
   return value.slice(0, maxLength);
 }
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Rejects malformed ids before they reach a UUID column, where Postgres would
+// answer with an unhandled input-syntax error.
+export function isValidUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}

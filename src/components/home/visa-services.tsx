@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Globe, Clock } from "lucide-react";
-import { visaServices } from "@/data";
+import type { VisaService } from "@/types";
 
-export function VisaServices() {
+interface VisaServicesProps {
+  services: VisaService[];
+}
+
+export function VisaServices({ services }: VisaServicesProps) {
   return (
     <section className="section-padding bg-slate-50 dark:bg-slate-900">
       <div className="container-premium mx-auto">
@@ -32,7 +36,7 @@ export function VisaServices() {
         </motion.div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {visaServices.map((visa, i) => (
+          {services.map((visa, i) => (
             <motion.div
               key={visa.id}
               initial={{ opacity: 0, y: 20 }}

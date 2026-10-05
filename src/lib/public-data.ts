@@ -4,8 +4,9 @@ import {
   teamMembers as staticTeamMembers,
   testimonials as staticTestimonials,
   tourPackages as staticTourPackages,
+  visaServices as staticVisaServices,
 } from "@/data";
-import type { BlogPost, Destination, Hotel, TeamMember, Testimonial, TourPackage } from "@/types";
+import type { BlogPost, Destination, Hotel, TeamMember, Testimonial, TourPackage, VisaService } from "@/types";
 import { getAllBlogPosts, getBlogPostById } from "@/lib/blog-service";
 import { getAllDestinations, getDestinationById } from "@/lib/destination-service";
 import { getAllHotels } from "@/lib/hotel-service";
@@ -13,6 +14,7 @@ import { getAllMembers } from "@/lib/team-service";
 import { getAllTestimonials } from "@/lib/testimonial-service";
 import { getAllPackages, getPackageById } from "@/lib/tour-package-service";
 import { getAllAboutTeam } from "@/lib/about-team-service";
+import { getAllVisaServices } from "@/lib/visa-service";
 
 export type AboutTeamMember = { id: string; name: string; role: string; image: string };
 
@@ -183,4 +185,19 @@ export async function getPublicHotels(): Promise<Hotel[]> {
 
 export async function getPublicAboutTeam(): Promise<AboutTeamMember[]> {
   return withFallback(getAllAboutTeam, staticAboutTeam);
+}
+
+export async function getPublicVisaServices(): Promise<VisaService[]> {
+  const services = await withFallback(getAllVisaServices, staticVisaServices);
+  return services
+    .map((service, index) => ({ service, index }))
+    // Static fallback rows carry no flags: treat missing values as published and
+    // keep their authored order.
+    .filter((entry) => entry.service.isActive !== false)
+    .sort(
+      (a, b) =>
+        (a.service.displayOrder ?? a.index) - (b.service.displayOrder ?? b.index) ||
+        a.index - b.index
+    )
+    .map((entry) => entry.service);
 }

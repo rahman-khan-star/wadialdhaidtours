@@ -15,7 +15,7 @@ export const BACKUP_TABLES: Record<string, string[]> = {
   tour_packages: ["id", "title", "destination", "description", "image", "duration", "price", "original_price", "rating", "review_count", "highlights", "included", "category", "created_at", "updated_at"],
   testimonials: ["id", "name", "avatar", "location", "rating", "text", "package", "created_at"],
   blog_posts: ["id", "title", "excerpt", "image", "author", "date", "category", "slug", "created_at", "updated_at"],
-  visa_services: ["id", "country", "flag", "type", "duration", "price", "processing_time", "requirements", "created_at"],
+  visa_services: ["id", "country", "flag", "type", "duration", "price", "processing_time", "requirements", "is_active", "display_order", "created_at"],
   faqs: ["id", "question", "answer", "created_at"],
   gallery_items: ["id", "image", "title", "destination", "created_at"],
   statistics: ["id", "label", "value", "suffix", "created_at"],
