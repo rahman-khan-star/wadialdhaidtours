@@ -12,14 +12,38 @@ type AdminCredentials = { username: string; passwordHash: string };
 
 let cachedCredentials: AdminCredentials | null | undefined;
 
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+// Env values pasted from .env files or terminals often arrive with stray
+// whitespace or wrapping quotes; normalize before comparing/storing.
+function normalizeEnvValue(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
+}
+
 // Credentials come from environment variables. Development-only defaults are
 // allowed locally but rejected in production (fail closed at login time).
 function getAdminCredentials(): AdminCredentials | null {
   if (cachedCredentials !== undefined) return cachedCredentials;
 
-  const username = process.env.ADMIN_USERNAME?.trim();
-  const passwordHash = process.env.ADMIN_PASSWORD_HASH?.trim();
-  const plainPassword = process.env.ADMIN_PASSWORD;
+  const username = normalizeEnvValue(process.env.ADMIN_USERNAME);
+  let passwordHash = normalizeEnvValue(process.env.ADMIN_PASSWORD_HASH);
+  const plainPassword = normalizeEnvValue(process.env.ADMIN_PASSWORD);
+
+  // Tolerate a common configuration mistake: if ADMIN_PASSWORD_HASH holds a
+  // value that is not a bcrypt hash (e.g. the password itself, or a quoted /
+  // corrupted paste), hash it at load so the normal bcrypt comparison works
+  // instead of silently rejecting every login attempt.
+  if (passwordHash && !BCRYPT_HASH_PATTERN.test(passwordHash)) {
+    passwordHash = bcrypt.hashSync(passwordHash, PASSWORD_HASH_ROUNDS);
+  }
 
   if (passwordHash) {
     cachedCredentials = {
@@ -111,13 +135,19 @@ export async function POST(request: Request) {
       );
     }
 
+    const attemptedName = credentials.username.toLowerCase();
+    const configuredName = admin.username.toLowerCase();
     const usernameMatches =
-      credentials.username.length === admin.username.length &&
-      timingSafeEqual(credentials.username, admin.username);
+      attemptedName.length === configuredName.length &&
+      timingSafeEqual(attemptedName, configuredName);
     const passwordMatches = await bcrypt.compare(credentials.password, admin.passwordHash);
 
     if (!usernameMatches || !passwordMatches) {
-      // Identical error for unknown user and wrong password prevents enumeration.
+      // Booleans only — no secrets. Identical error for unknown user and wrong
+      // password prevents enumeration; logs tell operators which side failed.
+      console.warn(
+        `Admin login rejected (usernameMatch=${usernameMatches}, passwordMatch=${passwordMatches})`
+      );
       await recordLoginHistory({
         username: credentials.username,
         status: "failed",
