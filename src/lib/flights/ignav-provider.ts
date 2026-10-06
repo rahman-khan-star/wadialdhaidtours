@@ -47,18 +47,20 @@ export function toIgnavCabin(cabin: CabinClass): string {
   return CABIN_TO_IGNAV[cabin] ?? "economy";
 }
 
-// IGNAV_API_KEY is preferred; FLIGHT_SEARCH_SECRET is honoured because that is
-// where the credential was originally stored. Both stay server-side.
+// IGNAV_API_KEY is the only credential this provider ever reads.
+// FLIGHT_SEARCH_SECRET is reserved for search-token HMAC signing and is
+// deliberately never accepted as an API key, so the two stay separate.
+// Server-side only — never referenced by client code.
+export function resolveIgnavApiKey(): string | null {
+  return process.env.IGNAV_API_KEY?.trim() || null;
+}
+
 function getApiKey(): string {
-  const explicit = process.env.IGNAV_API_KEY?.trim();
-  if (explicit) return explicit;
-
-  const legacy = process.env.FLIGHT_SEARCH_SECRET?.trim();
-  if (legacy) return legacy;
-
-  throw new Error(
-    "Missing Ignav API key. Set IGNAV_API_KEY (or FLIGHT_SEARCH_SECRET) on the server."
-  );
+  const key = resolveIgnavApiKey();
+  if (!key) {
+    throw new Error("Missing Ignav API key. Set IGNAV_API_KEY on the server.");
+  }
+  return key;
 }
 
 interface IgnavSegment {

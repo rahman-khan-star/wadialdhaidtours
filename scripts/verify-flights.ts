@@ -14,7 +14,11 @@ import {
   toPublicSearchResult,
   verifyFlightRequestToken,
 } from "../src/lib/flights";
-import { mapIgnavItineraries, toIgnavCabin } from "../src/lib/flights/ignav-provider";
+import {
+  mapIgnavItineraries,
+  resolveIgnavApiKey,
+  toIgnavCabin,
+} from "../src/lib/flights/ignav-provider";
 import type { FlightSearchInput, FlightSearchResult } from "../src/types";
 
 let passed = 0;
@@ -528,6 +532,18 @@ async function main(): Promise<void> {
   check(
     "ignav refuses to search without a key (no request is sent)",
     missingKeyMessage.includes("Missing Ignav API key")
+  );
+
+  process.env.IGNAV_API_KEY = "ignav-test-key-value";
+  check(
+    "IGNAV_API_KEY is the credential the provider reads",
+    resolveIgnavApiKey() === "ignav-test-key-value"
+  );
+  process.env.IGNAV_API_KEY = "   ";
+  process.env.FLIGHT_SEARCH_SECRET = "dedicated-hmac-secret-not-an-api-key";
+  check(
+    "FLIGHT_SEARCH_SECRET is never accepted as an API key",
+    resolveIgnavApiKey() === null
   );
   if (savedIgnavKey === undefined) delete process.env.IGNAV_API_KEY;
   else process.env.IGNAV_API_KEY = savedIgnavKey;
