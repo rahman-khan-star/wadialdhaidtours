@@ -14,6 +14,7 @@ import {
   toPublicSearchResult,
   verifyFlightRequestToken,
 } from "../src/lib/flights";
+import { mapIgnavItineraries, toIgnavCabin } from "../src/lib/flights/ignav-provider";
 import type { FlightSearchInput, FlightSearchResult } from "../src/types";
 
 let passed = 0;
@@ -60,6 +61,75 @@ function baseQuery(overrides: Partial<FlightSearchInput> = {}): FlightSearchInpu
     ...overrides,
   };
 }
+
+// Ignav response fixtures transcribed from the official documentation
+// (https://ignav.com/docs/response-format) so the mapping can be verified
+// without spending a single request from the free API allowance.
+const IGNAV_ONE_WAY_FIXTURE = {
+  itineraries: [
+    {
+      price: { amount: 542, currency: "USD", status: "verified" },
+      outbound: {
+        carrier: "United Airlines",
+        duration_minutes: 475,
+        segments: [
+          {
+            marketing_carrier_code: "UA",
+            flight_number: "1234",
+            operating_carrier_name: "United Airlines",
+            departure_airport: "SFO",
+            departure_time_local: "2026-11-05T06:00:00",
+            departure_time_utc: "2026-11-05T13:00:00Z",
+            arrival_airport: "ORD",
+            arrival_time_local: "2026-11-05T12:15:00",
+            arrival_time_utc: "2026-11-05T17:15:00Z",
+            duration_minutes: 255,
+          },
+          {
+            marketing_carrier_code: "UA",
+            flight_number: "5678",
+            operating_carrier_name: "United Airlines",
+            departure_airport: "ORD",
+            departure_time_local: "2026-11-05T13:30:00",
+            departure_time_utc: "2026-11-05T18:30:00Z",
+            arrival_airport: "JFK",
+            arrival_time_local: "2026-11-05T16:55:00",
+            arrival_time_utc: "2026-11-05T20:55:00Z",
+            duration_minutes: 145,
+          },
+        ],
+      },
+      cabin_class: "economy",
+      ignav_id: "a1b2c3d4e5f6789012345678abcdef01",
+    },
+  ],
+};
+
+const IGNAV_ROUND_TRIP_FIXTURE = {
+  itineraries: [
+    {
+      ...IGNAV_ONE_WAY_FIXTURE.itineraries[0],
+      inbound: {
+        carrier: "United Airlines",
+        duration_minutes: 360,
+        segments: [
+          {
+            marketing_carrier_code: "UA",
+            flight_number: "900",
+            operating_carrier_name: "United Airlines",
+            departure_airport: "JFK",
+            departure_time_local: "2026-11-25T18:00:00",
+            departure_time_utc: "2026-11-25T23:00:00Z",
+            arrival_airport: "SFO",
+            arrival_time_local: "2026-11-25T22:10:00",
+            arrival_time_utc: "2026-11-26T06:10:00Z",
+            duration_minutes: 360,
+          },
+        ],
+      },
+    },
+  ],
+};
 
 async function main(): Promise<void> {
   const provider = getFlightProvider();
@@ -291,7 +361,179 @@ async function main(): Promise<void> {
     check("expired token rejected", verifyFlightRequestToken(expiredToken) === null);
   }
 
+  section("Ignav provider (documented fixtures, zero API requests)");
+  const oneWayQuery = baseQuery({
+    origin: "SFO",
+    destination: "JFK",
+    tripType: "oneway",
+    returnDate: null,
+  });
+  const mappedOneWay = mapIgnavItineraries(
+    IGNAV_ONE_WAY_FIXTURE.itineraries,
+    oneWayQuery,
+    false
+  );
+  check("documented one-way response maps to a single offer", mappedOneWay.length === 1);
+  const ignavOffer = mappedOneWay[0];
+  check("connecting itinerary reports one stop", ignavOffer?.outbound.stops === 1);
+  check(
+    "stop airport preserved",
+    ignavOffer?.outbound.stopAirports.length === 1 && ignavOffer.outbound.stopAirports[0] === "ORD"
+  );
+  check("leg duration preserved", ignavOffer?.outbound.durationMinutes === 475);
+  check(
+    "local departure time trimmed to minutes",
+    ignavOffer?.outbound.departureTime === "2026-11-05T06:00"
+  );
+  check(
+    "local arrival time trimmed to minutes",
+    ignavOffer?.outbound.arrivalTime === "2026-11-05T16:55"
+  );
+  check("carrier name preserved", ignavOffer?.outbound.airline === "United Airlines");
+  check("carrier code preserved", ignavOffer?.outbound.airlineCode === "UA");
+  check(
+    "flight numbers joined per segment",
+    ignavOffer?.outbound.flightNumber === "UA1234 · UA5678"
+  );
+  check(
+    "route endpoints mapped",
+    ignavOffer?.outbound.origin.iata === "SFO" && ignavOffer.outbound.destination.iata === "JFK"
+  );
+  check(
+    "airport places enriched from the local dataset",
+    ignavOffer?.outbound.destination.city === "New York"
+  );
+  check("ignav_id becomes the offer id", ignavOffer?.id === IGNAV_ONE_WAY_FIXTURE.itineraries[0].ignav_id);
+  check(
+    "one-way search carries no inbound leg",
+    ignavOffer?.tripType === "oneway" && ignavOffer.inbound === null
+  );
+  check("cabin mapped from the response", ignavOffer?.cabin === "Economy");
+  check(
+    "provider fare kept server-side only",
+    ignavOffer?.internalFare?.amount === 542 && ignavOffer.internalFare.currency === "USD"
+  );
+  check(
+    "seat availability reported without fabricated scarcity",
+    ignavOffer?.availability === "Available" && ignavOffer.seatsRemaining === oneWayQuery.passengers
+  );
+
+  const publicIgnav = mappedOneWay.map((offer, index) =>
+    toPublicSearchResult(offer, `ignav-token-${index}`)
+  );
+  check(
+    "serializer strips the internal fare",
+    publicIgnav.every((flight) => !("internalFare" in flight))
+  );
+  check("serialized ignav flights contain no price-like keys", findPriceKeys(publicIgnav).length === 0);
+  let ignavGuardThrew = false;
+  try {
+    assertNoProviderPricing({ status: "available", flights: publicIgnav });
+  } catch {
+    ignavGuardThrew = true;
+  }
+  check("pricing guard accepts the ignav payload", !ignavGuardThrew);
+
+  const roundTripQuery = baseQuery({
+    origin: "SFO",
+    destination: "JFK",
+    tripType: "roundtrip",
+    returnDate: "2026-11-25",
+  });
+  const mappedRoundTrip = mapIgnavItineraries(
+    IGNAV_ROUND_TRIP_FIXTURE.itineraries,
+    roundTripQuery,
+    true
+  );
+  check("round-trip itinerary keeps its inbound leg", mappedRoundTrip.length === 1 && mappedRoundTrip[0].inbound !== null);
+  check(
+    "inbound leg runs the reverse route",
+    mappedRoundTrip[0]?.inbound?.origin.iata === "JFK" &&
+      mappedRoundTrip[0].inbound?.destination.iata === "SFO"
+  );
+  check("round-trip offer marked as roundtrip", mappedRoundTrip[0]?.tripType === "roundtrip");
+  check(
+    "round trip without a usable return leg is dropped",
+    mapIgnavItineraries(IGNAV_ONE_WAY_FIXTURE.itineraries, roundTripQuery, true).length === 0
+  );
+
+  const malformed = mapIgnavItineraries(
+    [
+      {},
+      { outbound: {} },
+      { outbound: { segments: [] } },
+      {
+        outbound: {
+          segments: [
+            {
+              departure_airport: "SFO",
+              arrival_airport: "JFK",
+              departure_time_local: "not-a-time",
+              arrival_time_local: "2026-11-05T16:55:00",
+            },
+          ],
+        },
+      },
+      {
+        outbound: {
+          segments: [
+            {
+              departure_airport: "SFO",
+              arrival_airport: "JFK",
+              departure_time_local: "2026-11-05T06:00:00",
+              arrival_time_local: "2026-11-05T17:15:00",
+              duration_minutes: 0,
+              departure_time_utc: "2026-11-05T13:00:00Z",
+              arrival_time_utc: "2026-11-05T17:15:00Z",
+            },
+          ],
+        },
+      },
+    ],
+    oneWayQuery,
+    false
+  );
+  check("malformed itineraries skipped, usable ones kept", malformed.length === 1);
+  check("duration falls back to the UTC timestamps", malformed[0]?.outbound.durationMinutes === 255);
+  check(
+    "non-array payload maps to no offers",
+    mapIgnavItineraries("not-an-array", oneWayQuery, false).length === 0
+  );
+
+  check(
+    "cabin classes map onto the Ignav enum",
+    toIgnavCabin("Economy") === "economy" &&
+      toIgnavCabin("Premium Economy") === "premium_economy" &&
+      toIgnavCabin("Business") === "business" &&
+      toIgnavCabin("First") === "first"
+  );
+
   section("Provider selection");
+  process.env.FLIGHT_PROVIDER = "ignav";
+  const ignavProvider = getFlightProvider();
+  check("ignav provider resolves when configured", ignavProvider.name === "ignav");
+  const ignavAirports = await ignavProvider.searchAirports("Lahore");
+  check("ignav airport lookup needs no API key", ignavAirports.some((airport) => airport.iata === "LHE"));
+
+  const savedIgnavKey = process.env.IGNAV_API_KEY;
+  const savedSearchSecret = process.env.FLIGHT_SEARCH_SECRET;
+  process.env.IGNAV_API_KEY = "";
+  process.env.FLIGHT_SEARCH_SECRET = "";
+  let missingKeyMessage = "";
+  try {
+    await ignavProvider.searchFlights(baseQuery({ origin: "DXB", destination: "KHI" }));
+  } catch (error) {
+    missingKeyMessage = error instanceof Error ? error.message : "";
+  }
+  check(
+    "ignav refuses to search without a key (no request is sent)",
+    missingKeyMessage.includes("Missing Ignav API key")
+  );
+  if (savedIgnavKey === undefined) delete process.env.IGNAV_API_KEY;
+  else process.env.IGNAV_API_KEY = savedIgnavKey;
+  if (savedSearchSecret === undefined) delete process.env.FLIGHT_SEARCH_SECRET;
+  else process.env.FLIGHT_SEARCH_SECRET = savedSearchSecret;
+
   process.env.FLIGHT_PROVIDER = "does-not-exist";
   let threw = false;
   try {
@@ -301,6 +543,7 @@ async function main(): Promise<void> {
   }
   check("unknown provider fails loudly", threw);
   process.env.FLIGHT_PROVIDER = "mock";
+  check("mock stays the default provider", getFlightProvider().name === "mock");
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
