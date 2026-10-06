@@ -17,6 +17,7 @@ import {
 import {
   getPublicBlogPosts,
   getPublicDestinations,
+  getPublicHotels,
   getPublicPackages,
   getPublicTeamMembers,
   getPublicTestimonials,
@@ -26,7 +27,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [destinations, packages, testimonials, teamMembers, blogPosts, visaServices] =
+  const [destinations, packages, testimonials, teamMembers, blogPosts, visaServices, hotels] =
     await Promise.all([
       getPublicDestinations(),
       getPublicPackages(),
@@ -34,12 +35,13 @@ export default async function Home() {
       getPublicTeamMembers(),
       getPublicBlogPosts(),
       getPublicVisaServices(),
+      getPublicHotels(),
     ]);
 
   return (
     <>
       <HeroSection />
-      <SearchTrips />
+      <SearchTrips hotels={hotels} packages={packages} />
       <UmrahPackages packages={packages} />
       <VisaServices services={visaServices} />
       <FeaturedDestinations destinations={destinations} />

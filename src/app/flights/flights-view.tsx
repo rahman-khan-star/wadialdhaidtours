@@ -1,92 +1,30 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import { Plane } from "lucide-react";
-import type {
-  FlightSearchInput,
-  FlightSearchQuery,
-  FlightSearchResponse,
-  FlightSearchResult,
-  FlightSearchStatus,
-} from "@/types";
-import { FlightSearchForm } from "@/components/flights/flight-search-form";
 import type { FlightSearchFormInitial } from "@/components/flights/flight-search-form";
+import { FlightSearchForm } from "@/components/flights/flight-search-form";
 import { FlightResults } from "@/components/flights/flight-results";
 import { FlightInquiryModal } from "@/components/flights/flight-inquiry-modal";
+import { useFlightSearch } from "@/components/flights/use-flight-search";
 
 interface FlightsViewProps {
   initial?: FlightSearchFormInitial;
 }
 
-interface SelectedFlight {
-  flight: FlightSearchResult;
-  query: FlightSearchQuery;
-}
-
-function toSearchParams(input: FlightSearchInput): URLSearchParams {
-  const params = new URLSearchParams({
-    origin: input.origin,
-    destination: input.destination,
-    departureDate: input.departureDate,
-    tripType: input.tripType,
-    passengers: String(input.passengers),
-    cabin: input.cabin,
-  });
-  if (input.returnDate) params.set("returnDate", input.returnDate);
-  return params;
-}
-
 export function FlightsView({ initial }: FlightsViewProps) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<FlightSearchStatus | null>(null);
-  const [flights, setFlights] = useState<FlightSearchResult[]>([]);
-  const [query, setQuery] = useState<FlightSearchQuery | null>(null);
-  const [lastInput, setLastInput] = useState<FlightSearchInput | null>(null);
-  const [selected, setSelected] = useState<SelectedFlight | null>(null);
-
-  const runSearch = useCallback(async (input: FlightSearchInput) => {
-    setLoading(true);
-    setError(null);
-    setStatus(null);
-    setFlights([]);
-    setLastInput(input);
-
-    try {
-      const res = await fetch(`/api/flights/search?${toSearchParams(input).toString()}`);
-      const data = (await res.json().catch(() => ({}))) as FlightSearchResponse & {
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(data.error || "We could not run that search. Please try again.");
-      }
-
-      setStatus(data.status);
-      setFlights(data.flights);
-      setQuery(data.query);
-    } catch (err) {
-      setStatus(null);
-      setFlights([]);
-      setQuery(null);
-      setError(err instanceof Error ? err.message : "We could not run that search.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const retry = useCallback(() => {
-    if (lastInput) void runSearch(lastInput);
-  }, [lastInput, runSearch]);
-
-  const handleRequest = useCallback(
-    (flight: FlightSearchResult) => {
-      if (!query) return;
-      setSelected({ flight, query });
-    },
-    [query]
-  );
+  const {
+    loading,
+    error,
+    status,
+    flights,
+    query,
+    selected,
+    setSelected,
+    runSearch,
+    retry,
+    requestFlight,
+  } = useFlightSearch();
 
   return (
     <>
@@ -128,7 +66,7 @@ export function FlightsView({ initial }: FlightsViewProps) {
               loading={loading}
               error={error}
               query={query}
-              onRequest={handleRequest}
+              onRequest={requestFlight}
               onRetry={retry}
             />
           </div>

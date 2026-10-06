@@ -5,15 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Star, MapPin, Clock, Search, ChevronDown } from "lucide-react";
+import { filterPackages, TOUR_CATEGORIES } from "@/lib/search-filters";
 import { formatPrice } from "@/lib/utils";
 import type { TourPackage } from "@/types";
 
-const categories = [
-  { label: "All", value: "all" },
-  { label: "Dubai Tours", value: "dubai" },
-  { label: "Pakistan Tours", value: "pakistan" },
-  { label: "Umrah Packages", value: "umrah" },
-];
+const categories = TOUR_CATEGORIES;
 
 interface TourPackagesViewProps {
   packages: TourPackage[];
@@ -30,13 +26,7 @@ export function TourPackagesView({ packages }: TourPackagesViewProps) {
     }
   };
 
-  const filtered = packages.filter((pkg) => {
-    const matchesCategory = active === "all" || pkg.category === active;
-    const matchesSearch =
-      pkg.title.toLowerCase().includes(search.toLowerCase()) ||
-      pkg.destination.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filtered = filterPackages(packages, { query: search, category: active });
 
   return (
     <>
