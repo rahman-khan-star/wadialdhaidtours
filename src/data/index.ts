@@ -34,6 +34,7 @@ export const navLinks: NavLink[] = [
   { label: "Visa Services", href: "/visa-services" },
   { label: "Umrah Packages", href: "/umrah-packages" },
   { label: "Hotels", href: "/hotels" },
+  { label: "Flights", href: "/flights" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
   { label: "Our Team", href: "/#team" },

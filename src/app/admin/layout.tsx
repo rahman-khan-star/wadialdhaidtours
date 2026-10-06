@@ -25,6 +25,7 @@ import {
   History,
   Database,
   FileCheck,
+  Plane,
 } from "lucide-react";
 
 const sidebarLinks = [
@@ -34,6 +35,7 @@ const sidebarLinks = [
   { label: "Hotels", href: "/admin/hotels", icon: MapPin },
   { label: "Visa Services", href: "/admin/visa-services", icon: FileCheck },
   { label: "Bookings", href: "/admin/bookings", icon: ClipboardList },
+  { label: "Flight Requests", href: "/admin/flight-requests", icon: Plane },
   { label: "Team Members", href: "/admin/team", icon: Users },
   { label: "Testimonials", href: "/admin/testimonials", icon: Star },
   { label: "Blog Posts", href: "/admin/blog", icon: FileText },

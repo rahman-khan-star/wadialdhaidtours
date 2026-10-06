@@ -135,3 +135,126 @@ export interface Booking {
   amount: number;
   status: "Confirmed" | "Pending";
 }
+
+// ---------------------------------------------------------------------------
+// Flights — search + inquiry (no online booking, no customer-facing pricing)
+// ---------------------------------------------------------------------------
+
+export type CabinClass = "Economy" | "Premium Economy" | "Business" | "First";
+
+export const CABIN_CLASSES: CabinClass[] = [
+  "Economy",
+  "Premium Economy",
+  "Business",
+  "First",
+];
+
+export type FlightTripType = "oneway" | "roundtrip";
+
+export interface FlightPlace {
+  iata: string;
+  name: string;
+  city: string;
+  country: string;
+}
+
+export interface AirportOption extends FlightPlace {
+  id: string;
+}
+
+export interface FlightLeg {
+  airline: string;
+  airlineCode: string;
+  flightNumber: string;
+  origin: FlightPlace;
+  destination: FlightPlace;
+  // Wall-clock local time at the respective airport, "YYYY-MM-DDTHH:mm".
+  departureTime: string;
+  arrivalTime: string;
+  durationMinutes: number;
+  stops: number;
+  stopAirports: string[];
+}
+
+export type FlightAvailability = "Available" | "Limited";
+
+// NOTE: deliberately contains no price/fare field. Customers never see pricing.
+export interface FlightOffer {
+  id: string;
+  tripType: FlightTripType;
+  cabin: CabinClass;
+  availability: FlightAvailability;
+  seatsRemaining: number;
+  outbound: FlightLeg;
+  inbound: FlightLeg | null;
+}
+
+export type FlightSearchStatus = "available" | "no_flights" | "unavailable";
+
+export interface FlightSearchInput {
+  origin: string;
+  destination: string;
+  departureDate: string;
+  returnDate: string | null;
+  passengers: number;
+  cabin: CabinClass;
+  tripType: FlightTripType;
+}
+
+export interface FlightSearchQuery {
+  origin: FlightPlace | null;
+  destination: FlightPlace | null;
+  departureDate: string;
+  returnDate: string | null;
+  passengers: number;
+  cabin: CabinClass;
+  tripType: FlightTripType;
+}
+
+// Server-signed reference the browser must present when submitting an inquiry,
+// so flight details are never trusted from client-supplied fields.
+export interface FlightSearchResult extends FlightOffer {
+  requestToken: string;
+}
+
+export interface FlightSearchResponse {
+  status: FlightSearchStatus;
+  message: string | null;
+  flights: FlightSearchResult[];
+  query: FlightSearchQuery;
+}
+
+export type FlightRequestStatus =
+  | "New"
+  | "Contacted"
+  | "In Progress"
+  | "Completed"
+  | "Cancelled";
+
+export const FLIGHT_REQUEST_STATUSES: FlightRequestStatus[] = [
+  "New",
+  "Contacted",
+  "In Progress",
+  "Completed",
+  "Cancelled",
+];
+
+export interface FlightRequest {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  originCode: string;
+  originName: string;
+  destinationCode: string;
+  destinationName: string;
+  departureDate: string;
+  returnDate: string | null;
+  passengers: number;
+  cabin: CabinClass;
+  airline: string;
+  flightNumber: string;
+  message: string;
+  status: FlightRequestStatus;
+  date: string;
+}

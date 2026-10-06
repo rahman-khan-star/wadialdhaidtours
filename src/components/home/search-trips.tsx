@@ -25,6 +25,16 @@ export function SearchTrips() {
   const [date, setDate] = useState("");
   const [guests, setGuests] = useState("");
 
+  const flightsHref = (() => {
+    const params = new URLSearchParams();
+    if (fromWhere.trim()) params.set("from", fromWhere.trim());
+    if (destination.trim()) params.set("to", destination.trim());
+    if (date.trim()) params.set("date", date.trim());
+    if (guests.trim()) params.set("guests", guests.trim());
+    const query = params.toString();
+    return query ? `/flights?${query}` : "/flights";
+  })();
+
   return (
     <section className="relative -mt-24 sm:-mt-28 z-20 px-4 mb-8">
       <div className="container-premium mx-auto">
@@ -115,7 +125,7 @@ export function SearchTrips() {
 
                   <div className="flex items-end">
                     <Link
-                      href="/tour-packages"
+                      href={flightsHref}
                       className="flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-sky-500 px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/30"
                     >
                       <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
