@@ -111,11 +111,11 @@ export default function AdminLayout({
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col border-r border-border bg-white dark:bg-navy-900 dark:border-white/10 transition-all duration-300 ${
+        className={`hidden lg:flex flex-col h-screen max-h-screen overflow-hidden border-r border-border bg-white dark:bg-navy-900 dark:border-white/10 transition-all duration-300 ${
           sidebarOpen ? "w-56" : "w-16"
         }`}
       >
-        <div className="flex items-center justify-between px-4 py-5 border-b border-border dark:border-white/10">
+        <div className="shrink-0 flex items-center justify-between px-4 py-5 border-b border-border dark:border-white/10">
           {sidebarOpen && (
             <Link href="/admin" className="flex items-center gap-2">
               <Image src="/logo travel 2-01.png" alt="WADI AL DHAID TOURS" width={36} height={36} className="shrink-0 object-contain" />
@@ -141,7 +141,7 @@ export default function AdminLayout({
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 [scrollbar-width:thin]">
           {sidebarLinks.map((link) => {
             const isActive =
               pathname === link.href ||
@@ -164,7 +164,7 @@ export default function AdminLayout({
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-border dark:border-white/10">
+        <div className="shrink-0 px-3 py-4 border-t border-border dark:border-white/10">
           <Link
             href="/"
             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-text-light hover:bg-sky-50 hover:text-text dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white transition-all"
@@ -197,9 +197,9 @@ export default function AdminLayout({
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
-              className="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-navy-900 border-r border-border dark:border-white/10 lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-64 h-screen max-h-screen flex flex-col overflow-hidden bg-white dark:bg-navy-900 border-r border-border dark:border-white/10 lg:hidden"
             >
-              <div className="flex items-center justify-between px-4 py-5 border-b border-border dark:border-white/10">
+              <div className="shrink-0 flex items-center justify-between px-4 py-5 border-b border-border dark:border-white/10">
                 <Link href="/admin" className="flex items-center gap-2">
                   <Image src="/logo travel 2-01.png" alt="WADI AL DHAID TOURS" width={36} height={36} className="shrink-0 object-contain" />
                   <div className="flex flex-col">
@@ -218,7 +218,7 @@ export default function AdminLayout({
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <nav className="px-3 py-4 space-y-1">
+              <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 [scrollbar-width:thin]">
                 {sidebarLinks.map((link) => {
                   const isActive =
                     pathname === link.href ||
