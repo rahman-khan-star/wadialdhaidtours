@@ -84,26 +84,24 @@ export function FlightSearchForm({ initial, loading = false, onSearch }: FlightS
       setError("Departure date cannot be in the past.");
       return;
     }
-    if (tripType === "roundtrip") {
-      if (!returnDate) {
-        setError("Choose a return date.");
-        return;
-      }
-      if (returnDate < departureDate) {
-        setError("Return date cannot be before the departure date.");
-        return;
-      }
+    if (tripType === "roundtrip" && returnDate && returnDate < departureDate) {
+      setError("Return date cannot be before the departure date.");
+      return;
     }
+
+    // A round trip without a return date searches outbound only — it is never
+    // blocked and never sent to the provider with a placeholder return date.
+    const isRoundTrip = tripType === "roundtrip" && Boolean(returnDate);
 
     setError(null);
     onSearch({
       origin: origin.iata,
       destination: destination.iata,
       departureDate,
-      returnDate: tripType === "roundtrip" ? returnDate : null,
+      returnDate: isRoundTrip ? returnDate : null,
       passengers,
       cabin,
-      tripType,
+      tripType: isRoundTrip ? "roundtrip" : "oneway",
     });
   };
 

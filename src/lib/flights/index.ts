@@ -4,7 +4,8 @@
 // configuration (and, later, provider API keys) that must stay off the browser.
 // Clients talk to the /api/flights/* route handlers instead.
 
-export { getFlightProvider } from "./provider";
+export { getFlightProvider, getFlightProviderDiagnostics } from "./provider";
+export type { FlightProviderDiagnostics, FlightProviderName } from "./provider";
 export { assertNoProviderPricing, toPublicSearchResult } from "./serialize";
 export { signFlightRequestToken, verifyFlightRequestToken } from "./search-token";
 export { parseAirportSearchParams, parseFlightSearchParams } from "./search-params";

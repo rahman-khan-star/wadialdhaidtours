@@ -58,16 +58,20 @@ export function parseFlightSearchParams(
   let returnDate: string | null = null;
   if (tripType === "roundtrip") {
     if (!rawReturnDate) {
-      return { ok: false, error: "Return date is required for a round trip." };
+      // The return date is optional: a round trip without one is searched as
+      // a one-way outbound trip. No fake return date is ever invented, so the
+      // provider takes its one-way path.
+      tripType = "oneway";
+    } else {
+      if (!isDateString(rawReturnDate)) return { ok: false, error: invalidDate("return date") };
+      if (rawReturnDate < departureDate) {
+        return { ok: false, error: "Return date cannot be before the departure date." };
+      }
+      if (rawReturnDate > addDaysIso(today, MAX_DAYS_AHEAD)) {
+        return { ok: false, error: `Return date must be within the next ${MAX_DAYS_AHEAD} days.` };
+      }
+      returnDate = rawReturnDate;
     }
-    if (!isDateString(rawReturnDate)) return { ok: false, error: invalidDate("return date") };
-    if (rawReturnDate < departureDate) {
-      return { ok: false, error: "Return date cannot be before the departure date." };
-    }
-    if (rawReturnDate > addDaysIso(today, MAX_DAYS_AHEAD)) {
-      return { ok: false, error: `Return date must be within the next ${MAX_DAYS_AHEAD} days.` };
-    }
-    returnDate = rawReturnDate;
   }
 
   const rawPassengers = (searchParams.get("passengers") ?? "").trim();

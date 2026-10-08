@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { consumeRateLimit, getClientIp } from "@/lib/rate-limit";
-import { getFlightProvider, parseAirportSearchParams } from "@/lib/flights";
+import { getFlightProvider, getFlightProviderDiagnostics, parseAirportSearchParams } from "@/lib/flights";
 
 const AIRPORT_WINDOW_MS = 60 * 1000;
 const AIRPORT_MAX_PER_WINDOW = 60;
 
 // Global origin/destination lookup behind the search form's autocomplete.
-// Provider credentials (when a real provider is added) stay on the server.
+// Provider credentials stay on the server and are never echoed by diagnostics.
 export async function GET(request: Request) {
   const clientIp = getClientIp(request);
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const airports = await provider.searchAirports(parsed.value.query, parsed.value.limit);
     return NextResponse.json({ airports });
   } catch (error) {
-    console.error("Failed to search airports:", error);
+    console.error("Failed to search airports:", getFlightProviderDiagnostics(), error);
     return NextResponse.json(
       { error: "Airport search is unavailable right now." },
       { status: 503 }

@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import type { AirportOption, FlightSearchInput, Hotel, TourPackage } from "@/types";
 import { AirportCombobox } from "@/components/flights/airport-combobox";
-import { CalendarField, latestSelectableDate } from "@/components/flights/calendar-field";
+import {
+  CalendarField,
+  earliestReturnDate,
+  latestSelectableDate,
+} from "@/components/flights/calendar-field";
 import { FlightResults } from "@/components/flights/flight-results";
 import { FlightInquiryModal } from "@/components/flights/flight-inquiry-modal";
 import { useFlightSearch } from "@/components/flights/use-flight-search";
@@ -39,6 +43,11 @@ const labelClassName =
 const submitClassName =
   "flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-sky-500 px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/30 disabled:opacity-60";
 
+const flightTripTypes: { id: "roundtrip" | "oneway"; label: string }[] = [
+  { id: "roundtrip", label: "Round trip" },
+  { id: "oneway", label: "One-way" },
+];
+
 interface SearchTripsProps {
   hotels: Hotel[];
   packages: TourPackage[];
@@ -55,6 +64,8 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
   const [origin, setOrigin] = useState<AirportOption | null>(null);
   const [arrival, setArrival] = useState<AirportOption | null>(null);
   const [departureDate, setDepartureDate] = useState<string | null>(null);
+  const [flightTripType, setFlightTripType] = useState<"oneway" | "roundtrip">("oneway");
+  const [flightReturnDate, setFlightReturnDate] = useState<string | null>(null);
   const [flightFormError, setFlightFormError] = useState<string | null>(null);
   const flightSearch = useFlightSearch();
 
@@ -64,6 +75,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
   const resultsRef = useRef<HTMLDivElement>(null);
   const today = todayIsoDate();
   const maxDate = latestSelectableDate();
+  const returnMinDate = earliestReturnDate(departureDate);
 
   const hotelResults = useMemo(
     () => (hotelSearch ? filterHotels(hotels, hotelSearch.query) : []),
@@ -103,17 +115,24 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
       setFlightFormError("Departure date cannot be in the past.");
       return;
     }
+    if (flightTripType === "roundtrip" && flightReturnDate && flightReturnDate < departureDate) {
+      setFlightFormError("Return date cannot be before the departure date.");
+      return;
+    }
 
     setFlightFormError(null);
     scrollToResults();
+    // Same rule as the /flights form: a round trip without a return date is
+    // searched outbound only, through the shared one-way provider path.
+    const isRoundTrip = flightTripType === "roundtrip" && Boolean(flightReturnDate);
     const input: FlightSearchInput = {
       origin: origin.iata,
       destination: arrival.iata,
       departureDate,
-      returnDate: null,
+      returnDate: isRoundTrip ? flightReturnDate : null,
       passengers: 1,
       cabin: "Economy",
-      tripType: "oneway",
+      tripType: isRoundTrip ? "roundtrip" : "oneway",
     };
     void flightSearch.runSearch(input);
   };
@@ -182,9 +201,29 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
               >
                 {activeTab === "flights" && (
                   <>
+                    <div className="mb-3 flex w-fit gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
+                      {flightTripTypes.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setFlightTripType(option.id);
+                            if (option.id === "oneway") setFlightReturnDate(null);
+                          }}
+                          className={`rounded-lg px-3 sm:px-4 py-1.5 text-xs font-semibold transition-all ${
+                            flightTripType === option.id
+                              ? "bg-sky-500 text-white shadow-sm"
+                              : "text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+
                     <form
                       onSubmit={handleFlightSearch}
-                      className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
+                      className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-5"
                     >
                       <AirportCombobox
                         label="From"
@@ -201,15 +240,28 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                         placeholder="City or airport"
                       />
                       <CalendarField
-                        label="Date"
+                        label="Departure"
                         value={departureDate}
                         minDate={today}
                         maxDate={maxDate}
                         placeholder="Select date"
                         onChange={(value) => {
                           setDepartureDate(value);
+                          if (value && flightReturnDate && flightReturnDate < value) {
+                            setFlightReturnDate(null);
+                          }
                           setFlightFormError(null);
                         }}
+                      />
+                      <CalendarField
+                        label="Return"
+                        value={flightTripType === "roundtrip" ? flightReturnDate : null}
+                        minDate={returnMinDate}
+                        maxDate={maxDate}
+                        align="end"
+                        disabled={flightTripType === "oneway"}
+                        placeholder={flightTripType === "oneway" ? "One-way" : "Select date"}
+                        onChange={setFlightReturnDate}
                       />
 
                       <div className="flex items-end">
@@ -363,7 +415,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                 onRetry={flightSearch.retry}
               />
               <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-                Looking for a round trip, more passengers or another cabin class?{" "}
+                Need more passengers or another cabin class?{" "}
                 <Link
                   href="/flights"
                   className="font-semibold text-sky-500 hover:underline"

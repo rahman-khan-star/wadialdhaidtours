@@ -4,6 +4,7 @@ import { consumeRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   assertNoProviderPricing,
   getFlightProvider,
+  getFlightProviderDiagnostics,
   parseFlightSearchParams,
   resolveAirportReference,
   signFlightRequestToken,
@@ -117,7 +118,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Flight search failed:", error);
+    // Server-side only. Diagnostics carry names/booleans, never credentials.
+    // There is no mock fallback here on purpose: a failed real search must
+    // surface as a search error, never as synthetic flights.
+    console.error("Flight search failed:", getFlightProviderDiagnostics(), error);
     return NextResponse.json(emptyResponse("unavailable", query, UNAVAILABLE_MESSAGE));
   }
 }

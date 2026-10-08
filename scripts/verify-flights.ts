@@ -3,12 +3,14 @@
  *
  * Run: npx tsx scripts/verify-flights.ts
  *
- * Covers provider search, mock inventory, the "no price" guarantee, search
- * parameter validation and the signed request token.
+ * Covers provider search, mock inventory, provider selection + safe
+ * diagnostics, the "no price" guarantee, search parameter validation and the
+ * signed request token.
  */
 import {
   assertNoProviderPricing,
   getFlightProvider,
+  getFlightProviderDiagnostics,
   parseFlightSearchParams,
   signFlightRequestToken,
   toPublicSearchResult,
@@ -36,6 +38,16 @@ function check(label: string, condition: boolean, detail?: string): void {
 
 function section(title: string): void {
   console.log(`\n${title}`);
+}
+
+// Failure text is useful for diagnosis, but a configured credential must never
+// be printed — strip it before it reaches the console.
+function redactSecrets(value: unknown, ...secrets: (string | undefined)[]): string {
+  let message = value instanceof Error ? `${value.name}: ${value.message}` : String(value);
+  for (const secret of secrets) {
+    if (secret && secret.length >= 8) message = message.split(secret).join("[redacted]");
+  }
+  return message.slice(0, 300);
 }
 
 const PRICE_KEY_PATTERN = /price|fare|amount|cost|currency|quote/i;
@@ -136,8 +148,16 @@ const IGNAV_ROUND_TRIP_FIXTURE = {
 };
 
 async function main(): Promise<void> {
+  // Capture the environment as configured, then pin the fixture sections to
+  // the mock provider so verification never spends a live API request. The
+  // final section restores the real configuration and reports it.
+  const originalProviderValue = process.env.FLIGHT_PROVIDER;
+  const originalApiKey = process.env.IGNAV_API_KEY;
+  process.env.FLIGHT_PROVIDER = "mock";
+  delete process.env.IGNAV_API_KEY;
+
   const provider = getFlightProvider();
-  check("default provider resolves to mock", provider.name === "mock");
+  check("explicit FLIGHT_PROVIDER=mock resolves to mock", provider.name === "mock");
 
   section("Airport / city search");
   const byCity = await provider.searchAirports("Lahore");
@@ -300,11 +320,41 @@ async function main(): Promise<void> {
     new URLSearchParams({
       origin: "DXB",
       destination: "KHI",
-      departureDate: "2026-11-20",
+      departureDate: "2026-11-15",
       tripType: "roundtrip",
     })
   );
-  check("round trip without return date rejected", missingReturn.ok === false);
+  check(
+    "round trip without return date falls back to a one-way search",
+    missingReturn.ok === true &&
+      missingReturn.value.tripType === "oneway" &&
+      missingReturn.value.returnDate === null
+  );
+
+  if (missingReturn.ok) {
+    const outboundOnly = await provider.searchFlights(missingReturn.value);
+    check(
+      "one-way path taken for a round trip without a return date",
+      outboundOnly.length > 0 &&
+        outboundOnly.every((offer) => offer.inbound === null && offer.tripType === "oneway")
+    );
+  }
+
+  const strayReturnDate = parseFlightSearchParams(
+    new URLSearchParams({
+      origin: "DXB",
+      destination: "KHI",
+      departureDate: "2026-11-20",
+      returnDate: "2026-11-25",
+      tripType: "oneway",
+    })
+  );
+  check(
+    "one-way search ignores a stray return date",
+    strayReturnDate.ok === true &&
+      strayReturnDate.value.tripType === "oneway" &&
+      strayReturnDate.value.returnDate === null
+  );
 
   const valid = parseFlightSearchParams(
     new URLSearchParams({
@@ -319,8 +369,30 @@ async function main(): Promise<void> {
   );
   check("valid search accepted", valid.ok === true);
   if (valid.ok) {
-    check("valid search keeps cabin", valid.value.cabin === "Business");
-    check("valid search keeps passengers", valid.value.passengers === 3);
+    check("valid round trip keeps cabin", valid.value.cabin === "Business");
+    check("valid round trip keeps passengers", valid.value.passengers === 3);
+    check("valid round trip stays roundtrip", valid.value.tripType === "roundtrip");
+    check("valid round trip keeps its return date", valid.value.returnDate === "2026-11-28");
+  }
+
+  const roundTripWithReturn = parseFlightSearchParams(
+    new URLSearchParams({
+      origin: "DXB",
+      destination: "KHI",
+      departureDate: "2026-11-15",
+      returnDate: "2026-11-25",
+      passengers: "1",
+      cabin: "Economy",
+      tripType: "roundtrip",
+    })
+  );
+  check("round trip with a return date is accepted", roundTripWithReturn.ok === true);
+  if (roundTripWithReturn.ok) {
+    const withReturn = await provider.searchFlights(roundTripWithReturn.value);
+    check(
+      "round trip with a return date produces inbound legs",
+      withReturn.length > 0 && withReturn.every((offer) => offer.inbound !== null)
+    );
   }
 
   section("Signed request token");
@@ -519,8 +591,57 @@ async function main(): Promise<void> {
   const ignavAirports = await ignavProvider.searchAirports("Lahore");
   check("ignav airport lookup needs no API key", ignavAirports.some((airport) => airport.iata === "LHE"));
 
+  process.env.FLIGHT_PROVIDER = "real";
+  check("FLIGHT_PROVIDER=real selects the real provider", getFlightProvider().name === "ignav");
+  process.env.FLIGHT_PROVIDER = "  \"LIVE\"  ";
+  check(
+    "provider value tolerates case, whitespace and quotes",
+    getFlightProvider().name === "ignav"
+  );
+
+  process.env.FLIGHT_PROVIDER = "ignav";
+  process.env.IGNAV_API_KEY = "ignav-test-key-value";
+  const realDiagnostics = getFlightProviderDiagnostics();
+  check(
+    "diagnostics report the real provider",
+    realDiagnostics.provider === "ignav" && realDiagnostics.realProviderRequested
+  );
+  check(
+    "diagnostics report the key as a boolean only",
+    realDiagnostics.ignavApiKeyConfigured === true
+  );
+  check(
+    "diagnostics never contain the key value",
+    !JSON.stringify(realDiagnostics).includes("ignav-test-key-value")
+  );
+
+  delete process.env.FLIGHT_PROVIDER;
+  check(
+    "unset FLIGHT_PROVIDER with a configured key selects the real provider",
+    getFlightProvider().name === "ignav"
+  );
+  check(
+    "unset FLIGHT_PROVIDER is reported as <unset>",
+    getFlightProviderDiagnostics().configuredValue === "<unset>"
+  );
+
+  delete process.env.IGNAV_API_KEY;
+  check(
+    "unset FLIGHT_PROVIDER without a key resolves to mock",
+    getFlightProvider().name === "mock"
+  );
+
+  process.env.IGNAV_API_KEY = "ignav-test-key-value";
+  process.env.FLIGHT_PROVIDER = "mock";
+  check(
+    "explicit mock still wins over a configured key",
+    getFlightProvider().name === "mock"
+  );
+  delete process.env.IGNAV_API_KEY;
+
   const savedIgnavKey = process.env.IGNAV_API_KEY;
   const savedSearchSecret = process.env.FLIGHT_SEARCH_SECRET;
+  process.env.FLIGHT_PROVIDER = "ignav";
   process.env.IGNAV_API_KEY = "";
   process.env.FLIGHT_SEARCH_SECRET = "";
   let missingKeyMessage = "";
@@ -558,8 +679,76 @@ async function main(): Promise<void> {
     threw = true;
   }
   check("unknown provider fails loudly", threw);
+  const unknownDiagnostics = getFlightProviderDiagnostics();
+  check(
+    "diagnostics flag an unknown value without echoing it",
+    unknownDiagnostics.provider === "unknown" &&
+      unknownDiagnostics.configuredValue === "<unrecognized>"
+  );
   process.env.FLIGHT_PROVIDER = "mock";
-  check("mock stays the default provider", getFlightProvider().name === "mock");
+  check("mock stays selectable", getFlightProvider().name === "mock");
+
+  section("Configured provider (this environment)");
+  if (originalProviderValue === undefined) delete process.env.FLIGHT_PROVIDER;
+  else process.env.FLIGHT_PROVIDER = originalProviderValue;
+  if (originalApiKey === undefined) delete process.env.IGNAV_API_KEY;
+  else process.env.IGNAV_API_KEY = originalApiKey;
+
+  const configured = getFlightProviderDiagnostics();
+  console.log(
+    `  INFO  provider=${configured.provider} FLIGHT_PROVIDER=${configured.configuredValue} ignavKeyConfigured=${configured.ignavApiKeyConfigured} searchTokenSecretConfigured=${configured.searchTokenSecretConfigured}`
+  );
+  check(
+    "effective provider resolves to a known provider",
+    configured.provider === "mock" || configured.provider === "ignav"
+  );
+
+  if (configured.provider === "ignav" && configured.ignavApiKeyConfigured) {
+    try {
+      const liveProvider = getFlightProvider();
+      const liveOffers = await liveProvider.searchFlights(
+        baseQuery({ origin: "DXB", destination: "KHI", tripType: "oneway", returnDate: null })
+      );
+      check("real provider returns an itinerary array", Array.isArray(liveOffers));
+      if (liveOffers.length > 0) {
+        check(
+          "real itineraries carry schedule fields",
+          liveOffers.every(
+            (offer) =>
+              Boolean(offer.outbound.airline) &&
+              Boolean(offer.outbound.flightNumber) &&
+              Boolean(offer.outbound.departureTime) &&
+              offer.outbound.durationMinutes > 0
+          )
+        );
+      }
+      const livePublic = liveOffers.map((offer, index) =>
+        toPublicSearchResult(offer, `live-${index}`)
+      );
+      const liveLeaked = findPriceKeys(livePublic);
+      check(
+        "real provider results contain no price-like keys",
+        liveLeaked.length === 0,
+        liveLeaked.join(", ")
+      );
+      let liveGuardThrew = false;
+      try {
+        assertNoProviderPricing({ status: "available", flights: livePublic });
+      } catch {
+        liveGuardThrew = true;
+      }
+      check("pricing guard accepts the real provider payload", !liveGuardThrew);
+      console.log(`  INFO  real provider responded with ${liveOffers.length} mapped itineraries`);
+    } catch (error) {
+      check(
+        "real provider search succeeded",
+        false,
+        redactSecrets(error, originalApiKey)
+      );
+    }
+  } else {
+    console.log("  SKIP  live real-provider check (configured provider is mock, or no key present)");
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
