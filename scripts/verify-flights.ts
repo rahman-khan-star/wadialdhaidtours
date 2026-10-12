@@ -17,6 +17,14 @@ import {
   verifyFlightRequestToken,
 } from "../src/lib/flights";
 import {
+  DEFAULT_FLIGHT_PRICING,
+  computeSellingPrice,
+  parseFlightPricingField,
+  parseFlightPricingRow,
+  validateFlightPricingSettings,
+} from "../src/lib/flights/pricing";
+import type { FlightPricingSettings } from "../src/lib/flights/pricing-config";
+import {
   mapIgnavItineraries,
   resolveIgnavApiKey,
   toIgnavCabin,
@@ -50,7 +58,15 @@ function redactSecrets(value: unknown, ...secrets: (string | undefined)[]): stri
   return message.slice(0, 300);
 }
 
-const PRICE_KEY_PATTERN = /price|fare|amount|cost|currency|quote/i;
+const PRICE_KEY_PATTERN = /price|fare|amount|cost|currency|quote|markup|pkr|aed/i;
+
+// Mirrors the production guard in serialize.ts: the only price-like paths a
+// public payload may contain are the sanitized final selling price and its
+// two amounts.
+const ALLOWED_PRICE_PATHS = [
+  /^flights\[\d+\]\.finalPrice$/,
+  /^flights\[\d+\]\.finalPrice\.(aed|pkr)$/,
+];
 
 function findPriceKeys(value: unknown, path = "", found: string[] = []): string[] {
   if (Array.isArray(value)) {
@@ -58,11 +74,23 @@ function findPriceKeys(value: unknown, path = "", found: string[] = []): string[
   } else if (value && typeof value === "object") {
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
       const next = path ? `${path}.${key}` : key;
-      if (PRICE_KEY_PATTERN.test(key)) found.push(next);
+      if (PRICE_KEY_PATTERN.test(key) && !ALLOWED_PRICE_PATHS.some((re) => re.test(next))) {
+        found.push(next);
+      }
       findPriceKeys(entry, next, found);
     }
   }
   return found;
+}
+
+// Provider fare + the default admin pricing rules -> the price a customer sees.
+function publicPriceFor(offer: { internalFare?: { amount: number; currency: string } }) {
+  return computeSellingPrice(offer.internalFare, DEFAULT_FLIGHT_PRICING);
+}
+
+// A settings object with every field valid, used as the base for pricing tests.
+function pricingSettings(overrides: Partial<FlightPricingSettings> = {}): FlightPricingSettings {
+  return { ...DEFAULT_FLIGHT_PRICING, ...overrides };
 }
 
 function baseQuery(overrides: Partial<FlightSearchInput> = {}): FlightSearchInput {
@@ -247,16 +275,48 @@ async function main(): Promise<void> {
       JSON.stringify(otherDates.map((o) => o.outbound.flightNumber))
   );
 
-  section("No customer-visible pricing");
+  section("Public payload: sanitized final selling price only");
   const sample = roundTrip[0];
   check("provider internally carries a fare", typeof sample?.internalFare?.amount === "number");
 
   const publicFlights = roundTrip.map((offer, index) =>
-    toPublicSearchResult(offer, `token-${index}`)
+    toPublicSearchResult(offer, `token-${index}`, publicPriceFor(offer))
   );
-  const payload = { status: "available", flights: publicFlights };
+  const payload = {
+    status: "available",
+    flights: publicFlights,
+    query: {
+      origin: null,
+      destination: null,
+      departureDate: "2026-11-15",
+      returnDate: null,
+      passengers: 1,
+      cabin: "Economy",
+      tripType: "roundtrip",
+    },
+  };
   const leaked = findPriceKeys(payload);
-  check("serialized flights contain no price-like keys", leaked.length === 0, leaked.join(", "));
+  check(
+    "serialized flights contain no unexpected price-like keys",
+    leaked.length === 0,
+    leaked.join(", ")
+  );
+  check(
+    "every serialized flight carries a final price",
+    publicFlights.length > 0 && publicFlights.every((flight) => flight.finalPrice !== null)
+  );
+  check(
+    "final price exposes exactly aed and pkr",
+    publicFlights.every(
+      (flight) =>
+        flight.finalPrice !== null &&
+        Object.keys(flight.finalPrice).sort().join(",") === "aed,pkr"
+    )
+  );
+  check(
+    "internal fare never survives serialization",
+    publicFlights.every((flight) => !("internalFare" in flight))
+  );
 
   let guardThrew = false;
   try {
@@ -264,15 +324,292 @@ async function main(): Promise<void> {
   } catch {
     guardThrew = true;
   }
-  check("pricing guard accepts a clean payload", !guardThrew);
+  check("pricing guard accepts the sanitized payload", !guardThrew);
 
-  let guardCaughtLeak = false;
+  // A null price is a designed state (fare or rate unavailable), not a leak.
+  let nullPriceAccepted = false;
   try {
-    assertNoProviderPricing({ flights: [{ price: 100 }] });
+    assertNoProviderPricing({ status: "available", flights: [{ finalPrice: null }] });
+    nullPriceAccepted = true;
   } catch {
-    guardCaughtLeak = true;
+    nullPriceAccepted = false;
   }
-  check("pricing guard rejects a leaked price", guardCaughtLeak);
+  check("pricing guard accepts an explicit unavailable price", nullPriceAccepted);
+
+  const rejectedPayloads: [string, unknown][] = [
+    ["a raw provider price", { flights: [{ price: 100 }] }],
+    ["a provider price object", { flights: [{ price: { amount: 100, currency: "USD" } }] }],
+    ["an internal fare field", { flights: [{ internalFare: { amount: 100, currency: "USD" } }] }],
+    ["a final price with the wrong keys", { flights: [{ finalPrice: { amount: 100 } }] }],
+    [
+      "a final price with an extra field",
+      { flights: [{ finalPrice: { aed: 100, pkr: 7600, base: 90 } }] },
+    ],
+    ["a scalar final price", { flights: [{ finalPrice: 100 }] }],
+    [
+      "a leaked markup setting",
+      { flights: [{ finalPrice: { aed: 100, pkr: 7600 }, markupPercent: 10 }] },
+    ],
+    ["a leaked exchange rate", { pkrPerAed: 76 }],
+    ["a leaked fixed charge", { flights: [{ fixedChargePkr: 3000 }] }],
+    ["a final price outside the flights array", { finalPrice: { aed: 100, pkr: 7600 } }],
+  ];
+
+  for (const [label, badPayload] of rejectedPayloads) {
+    let threw = false;
+    try {
+      assertNoProviderPricing(badPayload);
+    } catch {
+      threw = true;
+    }
+    check(`pricing guard rejects ${label}`, threw);
+  }
+
+  section("Flight pricing settings validation");
+  const modeAccepted = parseFlightPricingField("mode", " Both ");
+  check(
+    "markup mode accepted and normalised",
+    modeAccepted.ok === true && modeAccepted.value === "both"
+  );
+  check("unknown markup mode rejected", parseFlightPricingField("mode", "discount").ok === false);
+  check("non-string markup mode rejected", parseFlightPricingField("mode", 10).ok === false);
+
+  check("positive percentage accepted", parseFlightPricingField("markupPercent", 15).ok === true);
+  check(
+    "zero percentage accepted (no percentage markup)",
+    parseFlightPricingField("markupPercent", 0).ok === true
+  );
+  check("negative percentage rejected", parseFlightPricingField("markupPercent", -1).ok === false);
+  check(
+    "percentage above 100 rejected",
+    parseFlightPricingField("markupPercent", 101).ok === false
+  );
+  check(
+    "non-numeric percentage rejected",
+    parseFlightPricingField("markupPercent", "ten").ok === false
+  );
+  check("empty percentage rejected", parseFlightPricingField("markupPercent", "").ok === false);
+  check(
+    "NaN percentage rejected",
+    parseFlightPricingField("markupPercent", Number.NaN).ok === false
+  );
+
+  check("fixed charge accepted", parseFlightPricingField("fixedChargePkr", 3000).ok === true);
+  check(
+    "negative fixed charge rejected",
+    parseFlightPricingField("fixedChargePkr", -2000).ok === false
+  );
+  check(
+    "fixed charge above the cap rejected",
+    parseFlightPricingField("fixedChargePkr", 2_000_000).ok === false
+  );
+
+  check("PKR-per-AED rate accepted", parseFlightPricingField("pkrPerAed", 76).ok === true);
+  check(
+    "zero PKR-per-AED rate rejected",
+    parseFlightPricingField("pkrPerAed", 0).ok === false
+  );
+  check(
+    "negative PKR-per-AED rate rejected",
+    parseFlightPricingField("pkrPerAed", -76).ok === false
+  );
+  check(
+    "provider-to-AED rate accepted",
+    parseFlightPricingField("aedPerProviderUnit", 3.6725).ok === true
+  );
+  check(
+    "zero provider-to-AED rate rejected",
+    parseFlightPricingField("aedPerProviderUnit", 0).ok === false
+  );
+
+  const validSettings = {
+    mode: "both",
+    markupPercent: 15,
+    fixedChargePkr: 2000,
+    pkrPerAed: 76,
+    aedPerProviderUnit: 3.6725,
+  };
+  check("complete settings accepted", validateFlightPricingSettings(validSettings).ok === true);
+  check(
+    "settings missing a field rejected",
+    validateFlightPricingSettings({ mode: "percentage" }).ok === false
+  );
+  check("null settings rejected", validateFlightPricingSettings(null).ok === false);
+  check("array settings rejected", validateFlightPricingSettings([1, 2]).ok === false);
+  check(
+    "malformed value inside settings rejected",
+    validateFlightPricingSettings({ ...validSettings, pkrPerAed: "n/a" }).ok === false
+  );
+
+  section("Flight pricing settings read from storage");
+  const fromMissingRow = parseFlightPricingRow(null);
+  check(
+    "missing settings row falls back to the defaults",
+    fromMissingRow !== null &&
+      fromMissingRow.mode === DEFAULT_FLIGHT_PRICING.mode &&
+      fromMissingRow.markupPercent === DEFAULT_FLIGHT_PRICING.markupPercent &&
+      fromMissingRow.pkrPerAed === DEFAULT_FLIGHT_PRICING.pkrPerAed
+  );
+  const fromLegacyRow = parseFlightPricingRow({ company_name: "Wadi Zaid" });
+  check(
+    "row without pricing columns falls back to the defaults",
+    fromLegacyRow !== null && fromLegacyRow.mode === DEFAULT_FLIGHT_PRICING.mode
+  );
+
+  const goodRow = {
+    flight_pricing_mode: "both",
+    flight_markup_percent: 20,
+    flight_fixed_charge_pkr: 5000,
+    flight_pkr_per_aed: 76,
+    flight_aed_per_provider_unit: 3.6725,
+  };
+  const fromRow = parseFlightPricingRow(goodRow);
+  check(
+    "stored pricing row is read back",
+    fromRow !== null &&
+      fromRow.mode === "both" &&
+      fromRow.markupPercent === 20 &&
+      fromRow.fixedChargePkr === 5000 &&
+      fromRow.pkrPerAed === 76
+  );
+  check(
+    "numeric strings from Postgres are accepted",
+    parseFlightPricingRow({ ...goodRow, flight_markup_percent: "15" })?.markupPercent === 15
+  );
+  check(
+    "negative stored percentage makes settings unusable",
+    parseFlightPricingRow({ ...goodRow, flight_markup_percent: -5 }) === null
+  );
+  check(
+    "unknown stored mode makes settings unusable",
+    parseFlightPricingRow({ ...goodRow, flight_pricing_mode: "half" }) === null
+  );
+  check(
+    "zero stored exchange rate makes settings unusable",
+    parseFlightPricingRow({ ...goodRow, flight_pkr_per_aed: 0 }) === null
+  );
+  check(
+    "non-numeric stored rate makes settings unusable",
+    parseFlightPricingRow({ ...goodRow, flight_aed_per_provider_unit: "n/a" }) === null
+  );
+
+  section("Selling price calculation — percentage, fixed and both");
+  const aedFare = { amount: 1000, currency: "AED" };
+  const usdFare = { amount: 200, currency: "USD" };
+
+  const pct10 = computeSellingPrice(
+    aedFare,
+    pricingSettings({ mode: "percentage", markupPercent: 10, fixedChargePkr: 0 })
+  );
+  check(
+    "percentage mode: provider fare + 10% (AED)",
+    pct10 !== null && pct10.aed === 1100 && pct10.pkr === 83600
+  );
+
+  for (const pct of [5, 15, 20]) {
+    const price = computeSellingPrice(
+      aedFare,
+      pricingSettings({ mode: "percentage", markupPercent: pct, fixedChargePkr: 0 })
+    );
+    check(
+      `percentage mode: provider fare + ${pct}% (AED)`,
+      price !== null && price.aed === 1000 * (1 + pct / 100) && price.pkr === price.aed * 76
+    );
+  }
+
+  const fixedOnly = computeSellingPrice(
+    aedFare,
+    pricingSettings({ mode: "fixed", markupPercent: 10, fixedChargePkr: 3000 })
+  );
+  check(
+    "fixed mode: fare + PKR 3,000, percentage ignored",
+    fixedOnly !== null &&
+      Math.abs(fixedOnly.aed - (1000 + 3000 / 76)) < 0.005 &&
+      fixedOnly.pkr === 79000
+  );
+
+  const both = computeSellingPrice(
+    aedFare,
+    pricingSettings({ mode: "both", markupPercent: 10, fixedChargePkr: 3000 })
+  );
+  check(
+    "both mode: fare + 10% + PKR 3,000",
+    both !== null &&
+      Math.abs(both.aed - (1100 + 3000 / 76)) < 0.005 &&
+      both.pkr === 86600
+  );
+
+  const zeroMarkup = computeSellingPrice(
+    aedFare,
+    pricingSettings({ mode: "percentage", markupPercent: 0, fixedChargePkr: 0 })
+  );
+  check(
+    "zero markup passes the converted fare through unchanged",
+    zeroMarkup !== null && zeroMarkup.aed === 1000 && zeroMarkup.pkr === 76000
+  );
+
+  section("AED / PKR currency conversion");
+  const usdPrice = computeSellingPrice(
+    usdFare,
+    pricingSettings({ mode: "percentage", markupPercent: 10, fixedChargePkr: 0 })
+  );
+  check(
+    "USD fare converted with the provider rate, then marked up",
+    usdPrice !== null && Math.abs(usdPrice.aed - 200 * 3.6725 * 1.1) < 0.005
+  );
+  check(
+    "PKR amount derives from the displayed AED amount",
+    usdPrice !== null && usdPrice.pkr === Math.round(usdPrice.aed * 76)
+  );
+  check(
+    "selling price is never below the converted provider fare",
+    usdPrice !== null && usdPrice.aed > 200 * 3.6725
+  );
+
+  const pkrFare = computeSellingPrice(
+    { amount: 7600, currency: "PKR" },
+    pricingSettings({ mode: "percentage", markupPercent: 0, fixedChargePkr: 0 })
+  );
+  check(
+    "PKR-denominated fare converted with the PKR-per-AED rate",
+    pkrFare !== null && pkrFare.aed === 100 && pkrFare.pkr === 7600
+  );
+
+  const noRate = computeSellingPrice(
+    { amount: 100, currency: "EUR" },
+    pricingSettings({ aedPerProviderUnit: 0 })
+  );
+  check("unknown currency without a usable rate is unavailable", noRate === null);
+
+  section("Unavailable-price states");
+  check("missing fare is unavailable", computeSellingPrice(undefined, DEFAULT_FLIGHT_PRICING) === null);
+  check(
+    "zero-amount provider placeholder is unavailable",
+    computeSellingPrice({ amount: 0, currency: "USD" }, DEFAULT_FLIGHT_PRICING) === null
+  );
+  check(
+    "negative fare is unavailable",
+    computeSellingPrice({ amount: -100, currency: "USD" }, DEFAULT_FLIGHT_PRICING) === null
+  );
+  check(
+    "NaN fare is unavailable",
+    computeSellingPrice({ amount: Number.NaN, currency: "USD" }, DEFAULT_FLIGHT_PRICING) === null
+  );
+  check(
+    "missing fare currency is unavailable",
+    computeSellingPrice({ amount: 100, currency: "   " }, DEFAULT_FLIGHT_PRICING) === null
+  );
+  check(
+    "no pricing settings means no price",
+    computeSellingPrice({ amount: 100, currency: "AED" }, null) === null
+  );
+  check(
+    "an unavailable price still serializes as a clean null",
+    (() => {
+      const flight = toPublicSearchResult(roundTrip[0]!, "no-price-token", null);
+      return flight.finalPrice === null && findPriceKeys({ flights: [flight] }).length === 0;
+    })()
+  );
 
   section("Search parameter validation");
   const past = parseFlightSearchParams(
@@ -409,7 +746,8 @@ async function main(): Promise<void> {
           passengers: 2,
           cabin: "Economy",
           tripType: "roundtrip",
-        })
+        }),
+        publicPriceFor(offers[0])
       )
     : undefined;
   check("signed token attached to flight", Boolean(flight?.requestToken));
@@ -495,13 +833,20 @@ async function main(): Promise<void> {
   );
 
   const publicIgnav = mappedOneWay.map((offer, index) =>
-    toPublicSearchResult(offer, `ignav-token-${index}`)
+    toPublicSearchResult(offer, `ignav-token-${index}`, publicPriceFor(offer))
   );
   check(
     "serializer strips the internal fare",
     publicIgnav.every((flight) => !("internalFare" in flight))
   );
-  check("serialized ignav flights contain no price-like keys", findPriceKeys(publicIgnav).length === 0);
+  check(
+    "serialized ignav flights carry the final price",
+    publicIgnav.length > 0 && publicIgnav.every((flight) => flight.finalPrice !== null)
+  );
+  check(
+    "serialized ignav flights contain no price-like keys",
+    findPriceKeys({ flights: publicIgnav }).length === 0
+  );
   let ignavGuardThrew = false;
   try {
     assertNoProviderPricing({ status: "available", flights: publicIgnav });
@@ -723,11 +1068,11 @@ async function main(): Promise<void> {
         );
       }
       const livePublic = liveOffers.map((offer, index) =>
-        toPublicSearchResult(offer, `live-${index}`)
+        toPublicSearchResult(offer, `live-${index}`, publicPriceFor(offer))
       );
-      const liveLeaked = findPriceKeys(livePublic);
+      const liveLeaked = findPriceKeys({ flights: livePublic });
       check(
-        "real provider results contain no price-like keys",
+        "real provider results contain no unexpected price-like keys",
         liveLeaked.length === 0,
         liveLeaked.join(", ")
       );

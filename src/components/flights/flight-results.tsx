@@ -30,6 +30,15 @@ function availabilityClasses(availability: FlightSearchResult["availability"]): 
   return "bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-500/30";
 }
 
+// The API already rounds these; formatting only decides how many digits show
+// (dirhams to 2 decimals, rupees as whole numbers).
+function formatMoney(value: number, fractionDigits: number): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+}
+
 function LegDetails({ leg, caption }: { leg: FlightLeg; caption: string }) {
   const offset = dayOffset(leg.departureTime, leg.arrivalTime);
   const stopLabel =
@@ -147,7 +156,34 @@ function FlightCard({
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-700">
+      {/* Final selling price only: AED + PKR, or a clear unavailable state.
+          The provider fare, the markup and every pricing rule stay server-side. */}
+      <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
+        {flight.finalPrice ? (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-xl font-bold text-slate-800 dark:text-white">
+              AED {formatMoney(flight.finalPrice.aed, 2)}
+            </span>
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-300">
+              PKR {formatMoney(flight.finalPrice.pkr, 0)}
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              Final price for this itinerary
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-300">
+              Price unavailable
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              Send a request and we confirm the fare when we reply
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
           <span>{flight.cabin}</span>
           <span>
@@ -288,8 +324,8 @@ export function FlightResults({
             {summary && <span className="text-slate-400 dark:text-slate-500"> · {summary}</span>}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Schedule and availability only — send a request and our team provides your
-            personalised quotation.
+            Final selling prices in AED and PKR — send a request and our team confirms
+            availability and arranges your booking.
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-600 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">

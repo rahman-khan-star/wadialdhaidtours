@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, requireAdminSession } from "@/lib/admin-auth";
 import { logAdminAction } from "@/lib/audit";
+import {
+  FLIGHT_PRICING_COLUMNS,
+  clearFlightPricingCache,
+  parseFlightPricingField,
+  type FlightPricingField,
+} from "@/lib/flights/pricing";
 import { getSupabaseServer } from "@/lib/supabase-server";
 import { isRecord } from "@/lib/validation";
 
+// Admin-only settings endpoint (session cookie required for both methods).
+//
+// Flight pricing columns are admin configuration: they are readable and
+// writable here only. No public handler selects from `settings`, and the
+// flight search route never returns these values — it turns them into a
+// sanitized final price server-side.
 export async function GET(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
@@ -51,6 +63,21 @@ export async function PUT(request: Request) {
 
     const supabaseServer = getSupabaseServer();
 
+    // Flight pricing settings: each provided field is validated on its own and
+    // written as-is; a field that is absent keeps its stored value, so an
+    // unrelated settings save can never wipe the pricing configuration.
+    // Negative values, invalid rates and unknown modes are rejected with 400.
+    const pricingUpdate: Record<string, unknown> = {};
+    for (const field of Object.keys(FLIGHT_PRICING_COLUMNS) as FlightPricingField[]) {
+      const column = FLIGHT_PRICING_COLUMNS[field];
+      if (!(column in body)) continue;
+      const parsed = parseFlightPricingField(field, body[column]);
+      if (!parsed.ok) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      pricingUpdate[column] = parsed.value;
+    }
+
     // Settings are treated as a singleton row. Upserting on company_name
     // would insert a duplicate row whenever the company name changes.
     const { data: existing, error: fetchError } = await supabaseServer
@@ -73,6 +100,7 @@ export async function PUT(request: Request) {
       address: typeof address === "string" ? address.slice(0, 500) : "",
       currency: typeof currency === "string" && currency.trim() ? currency.slice(0, 10) : "USD",
       timezone: typeof timezone === "string" && timezone.trim() ? timezone.slice(0, 60) : "Asia/Dubai",
+      ...pricingUpdate,
     };
 
     let data: Record<string, unknown> | null = null;
@@ -95,11 +123,22 @@ export async function PUT(request: Request) {
       data = inserted;
     }
 
+    // A pricing save should be visible to the next search immediately. The
+    // loader also expires on its own after 60s, so a stale copy in another
+    // bundle can never serve old prices for longer than that.
+    if (Object.keys(pricingUpdate).length > 0) clearFlightPricingCache();
+
     await logAdminAction(request, auth, {
       action: "settings_update",
       resource: "settings",
       resourceId: data?.id as string | undefined,
-      metadata: { company_name: String(company_name).slice(0, 200) },
+      metadata: {
+        company_name: String(company_name).slice(0, 200),
+        // Audit that pricing changed (mode only — never a full price sheet).
+        ...(typeof pricingUpdate.flight_pricing_mode === "string"
+          ? { flight_pricing_mode: pricingUpdate.flight_pricing_mode }
+          : {}),
+      },
     });
 
     return NextResponse.json({ settings: data });

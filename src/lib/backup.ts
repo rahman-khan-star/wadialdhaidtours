@@ -21,7 +21,7 @@ export const BACKUP_TABLES: Record<string, string[]> = {
   statistics: ["id", "label", "value", "suffix", "created_at"],
   team_members: ["id", "name", "designation", "photo", "phone", "whatsapp", "description", "is_active", "display_order", "created_at", "updated_at"],
   messages: ["id", "name", "email", "phone", "subject", "message", "date", "read", "created_at"],
-  settings: ["id", "company_name", "email", "phone", "whatsapp", "website", "address", "currency", "timezone", "created_at", "updated_at"],
+  settings: ["id", "company_name", "email", "phone", "whatsapp", "website", "address", "currency", "timezone", "flight_pricing_mode", "flight_markup_percent", "flight_fixed_charge_pkr", "flight_pkr_per_aed", "flight_aed_per_provider_unit", "created_at", "updated_at"],
   bookings: ["id", "name", "package_name", "date", "amount", "status", "created_at"],
   hotels: ["id", "name", "location", "image", "rating", "price", "amenities", "created_at"],
   about_team: ["id", "name", "role", "image", "created_at"],

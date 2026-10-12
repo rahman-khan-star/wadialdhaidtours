@@ -3,8 +3,10 @@ import type { FlightSearchQuery, FlightSearchResponse, FlightPlace } from "@/typ
 import { consumeRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   assertNoProviderPricing,
+  computeSellingPrice,
   getFlightProvider,
   getFlightProviderDiagnostics,
+  loadFlightPricingSettings,
   parseFlightSearchParams,
   resolveAirportReference,
   signFlightRequestToken,
@@ -40,9 +42,11 @@ function toPlace(airport: ReturnType<typeof resolveAirportReference>): FlightPla
 
 // Public flight search.
 //
-// Customers only ever receive schedule + availability data. No price, fare or
-// booking capability leaves this handler, and every parameter is validated
-// server-side before the provider is called.
+// Customers receive schedule + availability data and the sanitized final
+// selling price (AED and PKR) computed server-side from the admin pricing
+// settings. The provider fare, the markup amount, the pricing settings and
+// every booking capability stay in this handler, and each parameter is
+// validated server-side before the provider is called.
 export async function GET(request: Request) {
   const clientIp = getClientIp(request);
 
@@ -91,6 +95,11 @@ export async function GET(request: Request) {
       return NextResponse.json(emptyResponse("no_flights", query, NO_FLIGHTS_MESSAGE));
     }
 
+    // Pricing settings are server-only. When they cannot be read (or are
+    // malformed) every flight still returns, with finalPrice: null — the
+    // client shows the unavailable-price state instead of a fabricated price.
+    const pricing = await loadFlightPricingSettings();
+
     const flights = offers.map((offer) =>
       toPublicSearchResult(
         offer,
@@ -102,7 +111,8 @@ export async function GET(request: Request) {
           passengers: input.passengers,
           cabin: input.cabin,
           tripType: input.tripType,
-        })
+        }),
+        computeSellingPrice(offer.internalFare, pricing.ok ? pricing.settings : null)
       )
     );
 
@@ -113,7 +123,8 @@ export async function GET(request: Request) {
       query,
     };
 
-    // Last line of defence: a price-like key anywhere in the body throws.
+    // Last line of defence: any price-like key other than the designed,
+    // sanitized finalPrice throws before the body reaches the client.
     assertNoProviderPricing(response);
 
     return NextResponse.json(response);

@@ -137,7 +137,12 @@ export interface Booking {
 }
 
 // ---------------------------------------------------------------------------
-// Flights — search + inquiry (no online booking, no customer-facing pricing)
+// Flights — search + inquiry (no online booking, no checkout)
+//
+// Customers never see the provider fare or any pricing breakdown. The only
+// price that may reach a browser is `FlightSearchResult.finalPrice`: the
+// server-computed selling price (provider fare + configured markup), rounded
+// and expressed in AED and PKR.
 // ---------------------------------------------------------------------------
 
 export type CabinClass = "Economy" | "Premium Economy" | "Business" | "First";
@@ -178,7 +183,9 @@ export interface FlightLeg {
 
 export type FlightAvailability = "Available" | "Limited";
 
-// NOTE: deliberately contains no price/fare field. Customers never see pricing.
+// NOTE: deliberately contains no price/fare field. Provider fares live on the
+// server-only ProviderFlightOffer.internalFare slot and never leave it; the
+// only customer-facing price is FlightSearchResult.finalPrice.
 export interface FlightOffer {
   id: string;
   tripType: FlightTripType;
@@ -211,10 +218,21 @@ export interface FlightSearchQuery {
   tripType: FlightTripType;
 }
 
+// Sanitised customer-facing price: the final selling amount only (provider
+// fare + configured markup), rounded, in the two currencies the site shows.
+// Deliberately carries no provider fare, no markup amount and no breakdown.
+export interface FlightFinalPrice {
+  aed: number;
+  pkr: number;
+}
+
 // Server-signed reference the browser must present when submitting an inquiry,
 // so flight details are never trusted from client-supplied fields.
+// `finalPrice` is null whenever the provider fare or a reliable conversion is
+// unavailable — the client then shows an unavailable-price state.
 export interface FlightSearchResult extends FlightOffer {
   requestToken: string;
+  finalPrice: FlightFinalPrice | null;
 }
 
 export interface FlightSearchResponse {

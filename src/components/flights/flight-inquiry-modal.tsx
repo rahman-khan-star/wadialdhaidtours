@@ -26,6 +26,16 @@ function placeLabel(place: FlightSearchQuery["origin"]): string {
   return `${place.city} (${place.iata})`;
 }
 
+// The same sanitized selling price shown on the result card, kept in the
+// inquiry summary so the customer sees what they requested.
+function priceLabel(price: FlightSearchResult["finalPrice"]): string {
+  if (!price) return "Price unavailable";
+  return `AED ${price.aed.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} · PKR ${price.pkr.toLocaleString("en-US")}`;
+}
+
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
@@ -214,6 +224,7 @@ export function FlightInquiryModal({ flight, query, onClose }: FlightInquiryModa
                   label="Passengers"
                   value={`${query.passengers} · ${query.cabin}`}
                 />
+                <SummaryRow label="Price" value={priceLabel(flight.finalPrice)} />
               </dl>
             </div>
 
