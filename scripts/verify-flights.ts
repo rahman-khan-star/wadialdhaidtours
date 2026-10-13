@@ -18,6 +18,7 @@ import {
 } from "../src/lib/flights";
 import {
   DEFAULT_FLIGHT_PRICING,
+  clearFlightPricingCache,
   computeSellingPrice,
   parseFlightPricingField,
   parseFlightPricingRow,
@@ -30,6 +31,7 @@ import {
   toIgnavCabin,
 } from "../src/lib/flights/ignav-provider";
 import type { FlightSearchInput, FlightSearchResult } from "../src/types";
+import { startFakeSupabase } from "./fake-supabase";
 
 let passed = 0;
 let failed = 0;
@@ -1032,6 +1034,237 @@ async function main(): Promise<void> {
   );
   process.env.FLIGHT_PROVIDER = "mock";
   check("mock stays selectable", getFlightProvider().name === "mock");
+
+  // ---------------------------------------------------------------------------
+  // Admin pricing flow, end to end, through the real route handlers.
+  //
+  // A local PostgREST stand-in (scripts/fake-supabase.ts) models the heap
+  // semantics that made saves land on one `settings` row while later reads
+  // returned another: with duplicate rows and an unordered `LIMIT 1`, the
+  // admin form and the flight-pricing loader can never agree on the live row,
+  // so saved markup/mode/charge changes never reach the public prices.
+  section("Admin pricing settings flow (route handlers)");
+  {
+    const fake = await startFakeSupabase({ settings: [], activity_logs: [], login_history: [] });
+    const savedEnv = {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      jwt: process.env.JWT_SECRET,
+      secret: process.env.FLIGHT_SEARCH_SECRET,
+    };
+    process.env.NEXT_PUBLIC_SUPABASE_URL = fake.url;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-verify-key";
+    process.env.JWT_SECRET = "verify-flights-jwt-secret-32chars-minimum";
+    process.env.FLIGHT_SEARCH_SECRET = "verify-flights-search-secret-32chars";
+    process.env.FLIGHT_PROVIDER = "mock";
+
+    const settingsRow = (overrides: Record<string, unknown> = {}) => ({
+      id: "11111111-1111-4111-8111-111111111111",
+      company_name: "Wadi Al Dhaid Tours LLC",
+      email: "info@example.com",
+      phone: "+971500000000",
+      whatsapp: "",
+      website: "https://example.com",
+      address: "Dubai",
+      currency: "USD",
+      timezone: "Asia/Dubai",
+      flight_pricing_mode: "percentage",
+      flight_markup_percent: 10,
+      flight_fixed_charge_pkr: 3000,
+      flight_pkr_per_aed: 76,
+      flight_aed_per_provider_unit: 3.6725,
+      created_at: "2026-10-01T00:00:00.000Z",
+      updated_at: "2026-10-01T00:00:00.000Z",
+      ...overrides,
+    });
+
+    type SettingsRowView = {
+      id?: string;
+      company_name?: string;
+      email?: string;
+      phone?: string;
+      whatsapp?: string;
+      website?: string;
+      address?: string;
+      flight_pricing_mode?: string;
+      flight_markup_percent?: number;
+    };
+    type SettingsGetResponse = { settings?: SettingsRowView | null };
+    type SettingsPutResponse = { settings?: SettingsRowView | null; error?: string };
+    type SearchResponseBody = {
+      internalFare?: unknown;
+      flights?: Array<{ finalPrice?: { aed: number; pkr: number } | null }>;
+    };
+
+    const settingsRoute = await import("../src/app/api/settings/route");
+    const searchRoute = await import("../src/app/api/flights/search/route");
+    const { createAdminSessionToken } = await import("../src/lib/admin-auth");
+
+    const cookie = `admin_token=${createAdminSessionToken({
+      username: "admin",
+      name: "Administrator",
+      role: "admin",
+    })}`;
+    const departureDate = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
+
+    const searchPrice = async (): Promise<{ aed: number; pkr: number } | null> => {
+      const res = await searchRoute.GET(
+        new Request(
+          "http://localhost/api/flights/search?" +
+            new URLSearchParams({
+              origin: "DXB",
+              destination: "KHI",
+              departureDate,
+              passengers: "1",
+              cabin: "Economy",
+              tripType: "oneway",
+            })
+        )
+      );
+      const body = (await res.json()) as SearchResponseBody;
+      if (body.internalFare) throw new Error("internalFare leaked into the search response");
+      return body.flights?.[0]?.finalPrice ?? null;
+    };
+
+    const adminGet = async () => {
+      const res = await settingsRoute.GET(
+        new Request("http://localhost/api/settings", { headers: { cookie } })
+      );
+      return ((await res.json()) as SettingsGetResponse).settings;
+    };
+
+    const adminPut = async (pricing: Record<string, string>) => {
+      const current = await adminGet();
+      const res = await settingsRoute.PUT(
+        new Request("http://localhost/api/settings", {
+          method: "PUT",
+          headers: { cookie, "content-type": "application/json" },
+          body: JSON.stringify({
+            company_name: current?.company_name ?? "Wadi Al Dhaid Tours LLC",
+            email: current?.email ?? "info@example.com",
+            phone: current?.phone ?? "+971500000000",
+            whatsapp: current?.whatsapp ?? "",
+            website: current?.website ?? "https://example.com",
+            address: current?.address ?? "Dubai",
+            currency: "USD",
+            timezone: "Asia/Dubai",
+            ...pricing,
+          }),
+        })
+      );
+      const body = (await res.json()) as SettingsPutResponse;
+      return { status: res.status, settings: body.settings, error: body.error };
+    };
+
+    const seed = (rows: Record<string, unknown>[]) => {
+      fake.db.settings.length = 0;
+      fake.db.settings.push(...rows);
+      clearFlightPricingCache();
+    };
+    const nearAed = (actual: { aed: number } | null, expected: number) =>
+      actual !== null && Math.abs(actual.aed - expected) < 0.02;
+    const priceDetail = (actual: { aed: number } | null, expected: number) =>
+      actual ? `aed=${actual.aed} expected≈${expected.toFixed(2)}` : "no price returned";
+
+    seed([settingsRow()]);
+    const base = await searchPrice();
+    const baseAed = base ? base.aed / 1.1 : 0; // stored markup is 10% percentage
+    check("single row: baseline search returns a final price", baseAed > 0);
+
+    const putPercent = await adminPut({ flight_pricing_mode: "percentage", flight_markup_percent: "20" });
+    check(
+      "single row: saving a percentage markup is accepted",
+      putPercent.status === 200 && putPercent.settings?.flight_markup_percent === 20,
+      putPercent.error
+    );
+    const afterPercent = await searchPrice();
+    check(
+      "single row: percentage change updates the selling price",
+      nearAed(afterPercent, baseAed * 1.2),
+      priceDetail(afterPercent, baseAed * 1.2)
+    );
+    const reread = await adminGet();
+    check("single row: admin form re-reads the saved markup", reread?.flight_markup_percent === 20);
+
+    const putFixed = await adminPut({
+      flight_pricing_mode: "fixed",
+      flight_fixed_charge_pkr: "5000",
+    });
+    check(
+      "single row: switching to a fixed charge is accepted",
+      putFixed.status === 200 && putFixed.settings?.flight_pricing_mode === "fixed",
+      putFixed.error
+    );
+    const afterFixed = await searchPrice();
+    check(
+      "single row: fixed charge updates the selling price",
+      nearAed(afterFixed, baseAed + 5000 / 76),
+      priceDetail(afterFixed, baseAed + 5000 / 76)
+    );
+
+    const putBoth = await adminPut({
+      flight_pricing_mode: "both",
+      flight_markup_percent: "10",
+      flight_fixed_charge_pkr: "2000",
+    });
+    check(
+      "single row: switching to combined markup + fixed charge is accepted",
+      putBoth.status === 200 && putBoth.settings?.flight_pricing_mode === "both",
+      putBoth.error
+    );
+    const afterBoth = await searchPrice();
+    check(
+      "single row: percentage and fixed charge apply together",
+      nearAed(afterBoth, baseAed * 1.1 + 2000 / 76),
+      priceDetail(afterBoth, baseAed * 1.1 + 2000 / 76)
+    );
+
+    // Regression: a duplicate settings row (e.g. restored from a backup) used
+    // to flip every unordered LIMIT 1 read to the stale row after the first
+    // save, so pricing never followed the admin's changes.
+    seed([
+      settingsRow({ id: "11111111-1111-4111-8111-111111111111", updated_at: "2026-10-01T00:00:00.000Z" }),
+      settingsRow({
+        id: "22222222-2222-4222-8222-222222222222",
+        company_name: "Restored Duplicate",
+        updated_at: "2026-10-02T00:00:00.000Z",
+      }),
+    ]);
+    const dupBase = await searchPrice();
+    const dupBaseAed = dupBase ? dupBase.aed / 1.1 : 0;
+    check("duplicate rows: baseline search returns a final price", dupBaseAed > 0);
+
+    const putDup = await adminPut({ flight_pricing_mode: "percentage", flight_markup_percent: "25" });
+    check(
+      "duplicate rows: PUT is accepted",
+      putDup.status === 200,
+      putDup.error
+    );
+    const afterDup = await searchPrice();
+    check(
+      "duplicate rows: search prices from the row the admin saved (25%)",
+      nearAed(afterDup, dupBaseAed * 1.25),
+      priceDetail(afterDup, dupBaseAed * 1.25)
+    );
+    const rereadDup = await adminGet();
+    check(
+      "duplicate rows: admin form re-reads the same saved row",
+      rereadDup?.flight_markup_percent === 25 &&
+        rereadDup?.id === "22222222-2222-4222-8222-222222222222",
+      `markup=${rereadDup?.flight_markup_percent} id=${rereadDup?.id}`
+    );
+
+    clearFlightPricingCache();
+    if (savedEnv.url === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = savedEnv.url;
+    if (savedEnv.key === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = savedEnv.key;
+    if (savedEnv.jwt === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = savedEnv.jwt;
+    if (savedEnv.secret === undefined) delete process.env.FLIGHT_SEARCH_SECRET;
+    else process.env.FLIGHT_SEARCH_SECRET = savedEnv.secret;
+    await fake.close();
+  }
 
   section("Configured provider (this environment)");
   if (originalProviderValue === undefined) delete process.env.FLIGHT_PROVIDER;

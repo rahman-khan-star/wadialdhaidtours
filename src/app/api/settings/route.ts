@@ -16,6 +16,14 @@ import { isRecord } from "@/lib/validation";
 // writable here only. No public handler selects from `settings`, and the
 // flight search route never returns these values — it turns them into a
 // sanitized final price server-side.
+//
+// `settings` is meant to be a singleton row, but the schema does not enforce
+// it (the unique index only covers company_name, and a backup restore can
+// insert an extra row). A bare `LIMIT 1` without an ORDER BY returns an
+// arbitrary row — and because an UPDATE moves the edited row to the end of
+// the heap, later reads can flip to a different row. All settings reads pin
+// the most recently updated row so the admin form and the flight-pricing
+// loader always agree on which row is live.
 export async function GET(request: Request) {
   const denied = requireAdmin(request);
   if (denied) return denied;
@@ -25,6 +33,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabaseServer
       .from("settings")
       .select("*")
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -79,10 +88,13 @@ export async function PUT(request: Request) {
     }
 
     // Settings are treated as a singleton row. Upserting on company_name
-    // would insert a duplicate row whenever the company name changes.
+    // would insert a duplicate row whenever the company name changes. The
+    // ordering must match GET and the pricing loader so the update lands on
+    // the same row those reads return (see the note above GET).
     const { data: existing, error: fetchError } = await supabaseServer
       .from("settings")
       .select("id, whatsapp")
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (fetchError) throw new Error(`Failed to fetch settings: ${fetchError.message}`);

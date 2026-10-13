@@ -243,6 +243,11 @@ export function clearFlightPricingCache(): void {
  * Never throws: when the settings cannot be read (missing configuration,
  * database error) or are malformed, it answers `{ ok: false }` and the caller
  * shows the unavailable-price state instead of pricing with unverified data.
+ *
+ * Orders by `updated_at` (newest first) exactly like the admin settings
+ * endpoint: `settings` is a logical singleton the schema does not enforce, so
+ * an unordered `LIMIT 1` could price from a stale duplicate row while the
+ * admin edits a different one.
  */
 export async function loadFlightPricingSettings(): Promise<FlightPricingSnapshot> {
   const now = Date.now();
@@ -257,6 +262,7 @@ export async function loadFlightPricingSettings(): Promise<FlightPricingSnapshot
     const { data, error } = await supabaseServer
       .from("settings")
       .select("*")
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (error) throw new Error(error.message);
