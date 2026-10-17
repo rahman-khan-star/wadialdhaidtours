@@ -54,6 +54,8 @@ export default function AdminSettingsPage() {
 
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pricingSaved, setPricingSaved] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -99,29 +101,34 @@ export default function AdminSettingsPage() {
     fetchSettings();
   }, []);
 
+  // The API resets company fields that are absent from the body, so every
+  // save path sends the loaded company values along; only the pricing columns
+  // ever change when the Flight Pricing button is used.
+  const settingsPayload = () => ({
+    company_name: settings.companyName,
+    email: settings.email,
+    phone: settings.phone,
+    whatsapp: "",
+    website: settings.website,
+    address: settings.address,
+    currency: settings.currency,
+    timezone: settings.timezone,
+    // Sent as raw strings: the API validates every value and answers
+    // 400 with the exact problem (negatives, bad rates, unknown mode).
+    [FLIGHT_PRICING_COLUMNS.mode]: pricing.mode,
+    [FLIGHT_PRICING_COLUMNS.markupPercent]: pricing.markupPercent,
+    [FLIGHT_PRICING_COLUMNS.fixedChargePkr]: pricing.fixedChargePkr,
+    [FLIGHT_PRICING_COLUMNS.pkrPerAed]: pricing.pkrPerAed,
+    [FLIGHT_PRICING_COLUMNS.aedPerProviderUnit]: pricing.aedPerProviderUnit,
+  });
+
   const handleSave = async () => {
     setSaveError(null);
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company_name: settings.companyName,
-          email: settings.email,
-          phone: settings.phone,
-          whatsapp: "",
-          website: settings.website,
-          address: settings.address,
-          currency: settings.currency,
-          timezone: settings.timezone,
-          // Sent as raw strings: the API validates every value and answers
-          // 400 with the exact problem (negatives, bad rates, unknown mode).
-          [FLIGHT_PRICING_COLUMNS.mode]: pricing.mode,
-          [FLIGHT_PRICING_COLUMNS.markupPercent]: pricing.markupPercent,
-          [FLIGHT_PRICING_COLUMNS.fixedChargePkr]: pricing.fixedChargePkr,
-          [FLIGHT_PRICING_COLUMNS.pkrPerAed]: pricing.pkrPerAed,
-          [FLIGHT_PRICING_COLUMNS.aedPerProviderUnit]: pricing.aedPerProviderUnit,
-        }),
+        body: JSON.stringify(settingsPayload()),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -132,6 +139,26 @@ export default function AdminSettingsPage() {
       setTimeout(() => setSaved(false), 3000);
     } catch {
       setSaveError("Failed to save settings. Please try again.");
+    }
+  };
+
+  const handlePricingSave = async () => {
+    setPricingError(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsPayload()),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setPricingError(data.error || "Failed to save flight pricing");
+        return;
+      }
+      setPricingSaved(true);
+      setTimeout(() => setPricingSaved(false), 3000);
+    } catch {
+      setPricingError("Failed to save flight pricing. Please try again.");
     }
   };
 
@@ -369,6 +396,36 @@ export default function AdminSettingsPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {pricingSaved && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-700 dark:bg-green-500/10 dark:text-green-400"
+          >
+            Flight pricing saved — new searches use it right away.
+          </motion.div>
+        )}
+
+        {pricingError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400"
+          >
+            {pricingError}
+          </motion.div>
+        )}
+
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-border pt-4 dark:border-white/10">
+          <button
+            onClick={handlePricingSave}
+            className="inline-flex items-center gap-2 rounded-xl gradient-gold px-5 py-2.5 text-sm font-semibold text-white"
+          >
+            <Save className="h-4 w-4" />
+            Save Flight Pricing
+          </button>
         </div>
       </div>
 
