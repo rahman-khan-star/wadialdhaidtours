@@ -90,7 +90,7 @@ export function VisaServices({ services }: VisaServicesProps) {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mt-10 rounded-2xl bg-gradient-to-r from-sky-500 to-sky-600 p-8"
+          className="mt-10 rounded-2xl bg-gradient-to-r from-sky-500 to-sky-600 p-6 sm:p-8"
         >
           <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div>
@@ -103,7 +103,7 @@ export function VisaServices({ services }: VisaServicesProps) {
             </div>
             <Link
               href="/contact"
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-3 text-sm font-semibold text-sky-600 transition-all hover:shadow-lg shrink-0"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-sky-600 transition-all hover:shadow-lg sm:px-8 shrink-0"
             >
               Get Free Consultation
               <ArrowRight className="h-4 w-4" />

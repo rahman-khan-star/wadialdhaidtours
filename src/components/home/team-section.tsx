@@ -29,7 +29,7 @@ function TeamCard({ member, index }: { member: TeamMember; index: number }) {
           src={member.photo}
           alt={member.name}
           fill
-          sizes="(max-width: 640px) 50vw, 25vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           style={{ willChange: "transform" }}
         />

@@ -266,6 +266,15 @@
   .text-dark-muted {
     color: rgba(248, 250, 252, 0.4);
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes float {

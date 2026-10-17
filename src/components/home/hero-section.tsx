@@ -7,13 +7,13 @@ import { Search, ArrowRight, MapPin, Calendar } from "lucide-react";
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-[80vh] flex items-end overflow-hidden pb-56">
+    <section className="relative min-h-[75vh] sm:min-h-[80vh] flex items-end overflow-hidden pb-40 sm:pb-56">
       <Image
         src="/HEROBACK.png"
         alt="Travel background"
         fill
         sizes="100vw"
-        className="object-cover object-top"
+        className="object-cover object-[50%_25%] sm:object-top"
         priority
       />
 
@@ -55,7 +55,7 @@ export function HeroSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.4 }}
-              className="flex items-center gap-2 sm:gap-3"
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3"
             >
               <div className="flex items-center gap-1.5">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 flex items-center justify-center">

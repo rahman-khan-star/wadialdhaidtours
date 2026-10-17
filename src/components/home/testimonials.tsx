@@ -105,7 +105,7 @@ export function Testimonials({ testimonials }: TestimonialsProps) {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.05 }}
-              className="flex-shrink-0 w-[300px] snap-start rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4"
+              className="flex-shrink-0 w-[280px] sm:w-[300px] snap-start rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4"
             >
               <Quote className="h-6 w-6 text-sky-200 dark:text-sky-800 mb-2" />
               <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-3 line-clamp-3">

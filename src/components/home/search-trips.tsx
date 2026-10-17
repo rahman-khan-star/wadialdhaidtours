@@ -35,13 +35,13 @@ const tabs = [
 ];
 
 const fieldBoxClassName =
-  "flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-2 sm:px-3 py-2 sm:py-2.5 focus-within:border-sky-400";
+  "flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-2.5 sm:px-3 py-2.5 focus-within:border-sky-400";
 const fieldInputClassName =
   "flex-1 bg-transparent text-xs sm:text-sm text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none";
 const labelClassName =
   "text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider";
 const submitClassName =
-  "flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-sky-500 px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/30 disabled:opacity-60";
+  "flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-sky-500 px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-600 hover:shadow-lg hover:shadow-sky-500/30 disabled:opacity-60";
 
 const flightTripTypes: { id: "roundtrip" | "oneway"; label: string }[] = [
   { id: "roundtrip", label: "Round trip" },
@@ -161,7 +161,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
 
   return (
     <>
-      <section className="relative -mt-24 sm:-mt-28 z-20 px-4 mb-8">
+      <section className="relative -mt-16 sm:-mt-28 z-20 px-4 mb-8">
         <div className="container-premium mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -170,7 +170,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
             transition={{ duration: 0.6 }}
             className="rounded-2xl bg-white dark:bg-slate-800 p-4 shadow-xl border border-slate-100 dark:border-slate-700"
           >
-            <div className="flex gap-1.5 sm:gap-2 mb-4 sm:mb-5">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4 sm:mb-5">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -178,7 +178,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
                       activeTab === tab.id
                         ? "bg-sky-500 text-white shadow-lg shadow-sky-500/30"
                         : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
@@ -201,7 +201,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
               >
                 {activeTab === "flights" && (
                   <>
-                    <div className="mb-3 flex w-fit gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
+                    <div className="mb-3 flex w-full sm:w-fit gap-1 rounded-xl bg-slate-100 dark:bg-slate-700 p-1">
                       {flightTripTypes.map((option) => (
                         <button
                           key={option.id}
@@ -210,7 +210,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                             setFlightTripType(option.id);
                             if (option.id === "oneway") setFlightReturnDate(null);
                           }}
-                          className={`rounded-lg px-3 sm:px-4 py-1.5 text-xs font-semibold transition-all ${
+                          className={`flex-1 sm:flex-none rounded-lg px-3 sm:px-4 py-2 sm:py-1.5 text-xs font-semibold transition-all ${
                             flightTripType === option.id
                               ? "bg-sky-500 text-white shadow-sm"
                               : "text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white"
@@ -223,7 +223,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
 
                     <form
                       onSubmit={handleFlightSearch}
-                      className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-5"
+                      className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-5"
                     >
                       <AirportCombobox
                         label="From"
@@ -291,7 +291,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                 {activeTab === "hotels" && (
                   <form
                     onSubmit={handleHotelSearch}
-                    className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
+                    className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
                   >
                     <div className="space-y-1 sm:space-y-1.5">
                       <label className={labelClassName}>Destination</label>
@@ -342,7 +342,7 @@ export function SearchTrips({ hotels, packages }: SearchTripsProps) {
                 {activeTab === "trips" && (
                   <form
                     onSubmit={handleTripSearch}
-                    className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
+                    className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
                   >
                     <div className="space-y-1 sm:space-y-1.5">
                       <label className={labelClassName}>Destination</label>

@@ -33,6 +33,31 @@ export function Navbar() {
     };
   }, []);
 
+  // Lock background page scrolling while the mobile menu is open; the menu's
+  // own link list scrolls independently via its overflow container. The lock
+  // lives on <html> because globals.css sets overflow-x there (body overflow
+  // would not propagate to the viewport in that case).
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const root = document.documentElement;
+    const previousOverflow = root.style.overflow;
+    root.style.overflow = "hidden";
+
+    // Crossing to the desktop breakpoint hides the menu (lg:hidden), so
+    // release the lock instead of leaving the page unscrollable.
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    const handleDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileOpen(false);
+    };
+    desktopQuery.addEventListener("change", handleDesktop);
+
+    return () => {
+      root.style.overflow = previousOverflow;
+      desktopQuery.removeEventListener("change", handleDesktop);
+    };
+  }, [mobileOpen]);
+
   return (
     <>
       <header
@@ -44,13 +69,13 @@ export function Navbar() {
         )}
       >
         <div className="container-premium mx-auto flex items-center justify-between px-4 py-2.5">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex min-w-0 items-center gap-2">
             <Image src="/logo travel 2-01.png" alt="WADI AL DHAID TOURS" width={32} height={32} className="shrink-0 object-contain" />
-            <div className="flex flex-col">
-              <span className="text-sm font-bold leading-tight text-slate-800 dark:text-white tracking-tight">
+            <div className="flex min-w-0 flex-col">
+              <span className="text-xs sm:text-sm font-bold leading-tight text-slate-800 dark:text-white tracking-tight truncate">
                 WADI AL DHAID TOURS
               </span>
-              <span className="text-[8px] font-medium uppercase tracking-[0.15em] text-sky-500">
+              <span className="text-[8px] font-medium uppercase tracking-[0.15em] text-sky-500 truncate">
                 Premium Experiences
               </span>
             </div>
@@ -149,9 +174,9 @@ export function Navbar() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 overflow-hidden"
+              className="lg:hidden absolute inset-x-0 top-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 overflow-hidden"
             >
-              <div className="container-premium mx-auto px-4 py-3">
+              <div className="container-premium mx-auto min-h-[calc(100dvh_-_3.25rem)] max-h-[calc(100dvh_-_3.25rem)] overflow-y-auto overscroll-contain px-4 pt-3 pb-[max(0.75rem,_env(safe-area-inset-bottom))]">
                 {navLinks.map((link) => (
                   <div key={link.label}>
                     <Link
